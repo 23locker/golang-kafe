@@ -3,15 +3,18 @@ services:
     image: postgres:15-alpine
     container_name: baikal_buuzy_db
     restart: always
-    env_file: .env
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secretpassword}
+      POSTGRES_DB: ${POSTGRES_DB:-baikal_buuzy}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-baikal_buuzy}",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -24,18 +27,30 @@ services:
       dockerfile: Dockerfile
     container_name: baikal_buuzy_backend
     restart: always
-    env_file: .env
     environment:
-      PORT: ${PORT}
-      DATABASE_URL: ${DATABASE_URL}
-      JWT_SECRET: ${JWT_SECRET}
+      PORT: ${PORT:-8080}
+      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:secretpassword@db:5432/baikal_buuzy?sslmode=disable}
+      JWT_SECRET: ${JWT_SECRET:-supersecretjwtkeyforbaikalbuuzycafe2026}
     volumes:
-      - uploads_data:/app/uploads
+      - ./backend/uploads:/app/uploads
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - app-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: baikal_buuzy_frontend
+    restart: always
     ports:
-      - "8080:8080"
+      - "80:80"
+    volumes:
+      - ./frontend/public/images:/usr/share/nginx/html/images
+    depends_on:
+      - backend
     networks:
       - app-network
 

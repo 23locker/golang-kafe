@@ -184,15 +184,31 @@
             const prodRes = await fetch("/api/products");
             if (prodRes.ok) {
                 productsList = await prodRes.json();
-                dishes = productsList.filter(p => p.is_available).map((p) => ({
-                    id: String(p.id),
-                    name: p.name,
-                    description: p.description,
-                    price: p.price,
-                    image: p.image_url || "/images/placeholder.jpg",
-                    category: (categories.find((c) => c.id === p.category_id)
-                        ?.slug || "main") as any,
-                }));
+                dishes = productsList
+                    .filter((p) => p.is_available)
+                    .map((p) => {
+                        let img = p.image_url || "/images/placeholder.jpg";
+                        // Map default database seed image paths to actual local files
+                        if (img === "/images/buuzy-classic.jpg") img = "/images/hero_buuzy_plate.png";
+                        else if (img === "/images/buuzy-lamb.jpg") img = "/images/hero_buuzy_plate.png";
+                        else if (img === "/images/shulen.jpg") img = "/images/hero_steak_plate_1779197902033.png";
+                        else if (img === "/images/buhler.jpg") img = "/images/creamy_mushrooms_plate_1779198170202.png";
+                        else if (img === "/images/asian-salad.jpg") img = "/images/fresh_salad_plate_1779198150233.png";
+                        else if (img === "/images/bird-cherry-cake.jpg") img = "/images/salmon_steak_plate_1779197942330.png";
+                        else if (img === "/images/milky-tea.jpg") img = "/images/grilled_fish_plate_1779197923227.png";
+                        else if (img === "/images/sea-buckthorn-drink.jpg") img = "/images/creamy_mushrooms_plate_1779198170202.png";
+                        
+                        return {
+                            id: String(p.id),
+                            name: p.name,
+                            description: p.description,
+                            price: p.price,
+                            image: img,
+                            category: (categories.find(
+                                (c) => c.id === p.category_id,
+                            )?.slug || "main") as any,
+                        };
+                    });
             }
         } catch (e) {
             console.error("Failed to load menu data:", e);
@@ -248,7 +264,7 @@
             if (resRes.ok) {
                 adminReservations = await resRes.json();
             }
-            if (currentUser?.role === 'chief_admin') {
+            if (currentUser?.role === "chief_admin") {
                 let statsUrl = "/api/admin/stats";
                 if (statsStartDate && statsEndDate) {
                     statsUrl += `?start_date=${statsStartDate}&end_date=${statsEndDate}`;
@@ -280,8 +296,12 @@
         const handleHash = () => {
             if (window.location.hash === "#admin") {
                 currentView = "admin";
-                if (currentUser && currentUser.role !== 'chief_admin' && adminTab === 'stats') {
-                    adminTab = 'orders';
+                if (
+                    currentUser &&
+                    currentUser.role !== "chief_admin" &&
+                    adminTab === "stats"
+                ) {
+                    adminTab = "orders";
                 }
                 fetchAdminData();
             } else if (window.location.hash === "#menu-view") {
@@ -1085,7 +1105,7 @@
                                             <p
                                                 class="text-xs text-white/40 font-mono"
                                             >
-                                                {res.reserve_date} в {res.reserve_time}
+                                                {res.reserve_date ? new Date(res.reserve_date).toLocaleDateString() : ""} в {res.reserve_time}
                                             </p>
                                             {#if res.comment}
                                                 <p
@@ -1420,7 +1440,7 @@
                                 >Контакты</a
                             >
                         </li>
-                        {#if currentUser?.role === 'chief_admin'}
+                        {#if currentUser?.role === "chief_admin"}
                             <li>
                                 <a
                                     href="#admin"
@@ -1429,7 +1449,7 @@
                                 >
                             </li>
                         {/if}
-                        {#if currentUser?.role === 'establishment_admin'}
+                        {#if currentUser?.role === "establishment_admin"}
                             <li>
                                 <a
                                     href="#admin"
@@ -1447,11 +1467,11 @@
                         >+7 999 456-23-23</a
                     >
 
-                    <!-- Auth Toggle -->
                     {#if currentUser}
                         <button
                             onclick={() => {
                                 isProfileOpen = true;
+                                editAddress = currentUser?.default_address || "";
                                 fetchUserHistory();
                             }}
                             class="flex items-center gap-2 text-[10px] font-mono text-white/60 hover:text-white transition-colors cursor-pointer"
@@ -1566,7 +1586,7 @@
                                 : 'opacity-0 scale-105'}"
                         >
                             <img
-                                src="/src/assets/images/hero_buuzy_plate.png"
+                                src="/images/hero_buuzy_plate.png"
                                 alt="Buryat Food"
                                 class="w-full max-w-2xl mx-auto drop-shadow-[0_0_50px_rgba(255,255,255,0.05)]"
                             />
@@ -1726,9 +1746,9 @@
                         </p>
                     {:else}
                         {#each categories as cat}
-                            {@const catDishes = dishes.filter(
-                                (d) => d.category === cat.slug,
-                            ).slice(0, 4)}
+                            {@const catDishes = dishes
+                                .filter((d) => d.category === cat.slug)
+                                .slice(0, 4)}
                             {#if catDishes.length > 0}
                                 <MenuCategory
                                     title={cat.name}
@@ -1994,7 +2014,7 @@
                                     <p
                                         class="text-xl font-light italic text-white/60 leading-tight"
                                     >
-                                        45-я Параллель 5/3А, Ставрополь
+                                        45-я Параллель 5/3А, Геленджик
                                     </p>
                                 </div>
                             </div>
@@ -2136,7 +2156,7 @@
         >
             <!-- Admin Navigation Sidebar -->
             <aside class="w-full lg:w-64 space-y-2 flex-shrink-0">
-                {#if currentUser?.role === 'chief_admin'}
+                {#if currentUser?.role === "chief_admin"}
                     <button
                         onclick={() => (adminTab = "stats")}
                         class="w-full text-left px-6 py-4 text-[11px] font-mono uppercase tracking-widest border transition-all cursor-pointer flex items-center gap-4 {adminTab ===
@@ -2171,7 +2191,7 @@
                     <span>Бронирования ({adminReservations.length})</span>
                 </button>
 
-                {#if currentUser?.role === 'chief_admin'}
+                {#if currentUser?.role === "chief_admin"}
                     <button
                         onclick={() => (adminTab = "menu")}
                         class="w-full text-left px-6 py-4 text-[11px] font-mono uppercase tracking-widest border transition-all cursor-pointer flex items-center gap-4 {adminTab ===
@@ -2210,10 +2230,22 @@
                         </h2>
 
                         <div class="flex items-center gap-4 mb-8">
-                            <input type="date" bind:value={statsStartDate} class="bg-white/5 border border-white/10 px-4 py-2 text-xs text-white focus:outline-none focus:border-brand-red rounded-sm font-mono" />
+                            <input
+                                type="date"
+                                bind:value={statsStartDate}
+                                class="bg-white/5 border border-white/10 px-4 py-2 text-xs text-white focus:outline-none focus:border-brand-red rounded-sm font-mono"
+                            />
                             <span class="text-white/40">-</span>
-                            <input type="date" bind:value={statsEndDate} class="bg-white/5 border border-white/10 px-4 py-2 text-xs text-white focus:outline-none focus:border-brand-red rounded-sm font-mono" />
-                            <button onclick={fetchAdminData} class="px-6 py-2 bg-white text-black text-[10px] font-bold uppercase tracking-widest hover:bg-brand-red hover:text-white transition-colors cursor-pointer rounded-sm">Применить</button>
+                            <input
+                                type="date"
+                                bind:value={statsEndDate}
+                                class="bg-white/5 border border-white/10 px-4 py-2 text-xs text-white focus:outline-none focus:border-brand-red rounded-sm font-mono"
+                            />
+                            <button
+                                onclick={fetchAdminData}
+                                class="px-6 py-2 bg-white text-black text-[10px] font-bold uppercase tracking-widest hover:bg-brand-red hover:text-white transition-colors cursor-pointer rounded-sm"
+                                >Применить</button
+                            >
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
                             <div
@@ -2809,11 +2841,18 @@
                                         <input
                                             type="file"
                                             accept="image/*"
-                                            onchange={(e) => prodFormImageFile = e.currentTarget.files?.[0] || null}
+                                            onchange={(e) =>
+                                                (prodFormImageFile =
+                                                    e.currentTarget
+                                                        .files?.[0] || null)}
                                             class="w-full bg-white/5 border border-white/10 px-4 py-3 text-xs text-white focus:outline-none focus:border-brand-red rounded-sm font-mono"
                                         />
                                         {#if prodFormImage && !prodFormImageFile}
-                                            <p class="text-[10px] text-white/40 mt-1">Текущее изображение: {prodFormImage}</p>
+                                            <p
+                                                class="text-[10px] text-white/40 mt-1"
+                                            >
+                                                Текущее изображение: {prodFormImage}
+                                            </p>
                                         {/if}
                                     </div>
 
@@ -2843,9 +2882,20 @@
                                     </div>
 
                                     <div class="space-y-1 mt-4">
-                                        <label class="flex items-center gap-2 cursor-pointer">
-                                            <input type="checkbox" bind:checked={prodFormIsAvailable} class="w-4 h-4 accent-brand-red" />
-                                            <span class="text-[9px] uppercase tracking-widest text-white/80 font-mono">В наличии</span>
+                                        <label
+                                            class="flex items-center gap-2 cursor-pointer"
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                bind:checked={
+                                                    prodFormIsAvailable
+                                                }
+                                                class="w-4 h-4 accent-brand-red"
+                                            />
+                                            <span
+                                                class="text-[9px] uppercase tracking-widest text-white/80 font-mono"
+                                                >В наличии</span
+                                            >
                                         </label>
                                     </div>
 
