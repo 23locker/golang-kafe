@@ -46,7 +46,7 @@ services:
     container_name: baikal_buuzy_frontend
     restart: always
     ports:
-      - "80:80"
+      - "127.0.0.1:8000:80"
     volumes:
       - ./frontend/public/images:/usr/share/nginx/html/images
     depends_on:
