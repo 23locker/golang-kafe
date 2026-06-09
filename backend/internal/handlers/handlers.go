@@ -23,6 +23,7 @@ import (
 type contextKey string
 
 const userIDKey contextKey = "userID"
+const userRoleKey contextKey = "userRole"
 
 type Handler struct {
 	authService        services.AuthService
@@ -93,17 +94,26 @@ func (h *Handler) InitRoutes() http.Handler {
 		})
 
 		r.Route("/admin", func(r chi.Router) {
-			r.Get("/orders", h.adminGetOrders)
-			r.Put("/orders/{id}/status", h.adminUpdateOrderStatus)
-			r.Get("/reservations", h.adminGetReservations)
-			r.Put("/reservations/{id}/status", h.adminUpdateReservationStatus)
-			r.Post("/products", h.adminCreateProduct)
-			r.Put("/products/{id}", h.adminUpdateProduct)
-			r.Delete("/products/{id}", h.adminDeleteProduct)
-			r.Post("/categories", h.adminCreateCategory)
-			r.Put("/categories/{id}", h.adminUpdateCategory)
-			r.Delete("/categories/{id}", h.adminDeleteCategory)
-			r.Get("/stats", h.adminGetStats)
+			// Доступ для главного администратора и администратора заведения
+			r.Group(func(r chi.Router) {
+				r.Use(h.establishmentAdminRequiredMiddleware)
+				r.Get("/orders", h.adminGetOrders)
+				r.Put("/orders/{id}/status", h.adminUpdateOrderStatus)
+				r.Get("/reservations", h.adminGetReservations)
+				r.Put("/reservations/{id}/status", h.adminUpdateReservationStatus)
+			})
+
+			// Доступ только для главного администратора
+			r.Group(func(r chi.Router) {
+				r.Use(h.chiefAdminRequiredMiddleware)
+				r.Post("/products", h.adminCreateProduct)
+				r.Put("/products/{id}", h.adminUpdateProduct)
+				r.Delete("/products/{id}", h.adminDeleteProduct)
+				r.Post("/categories", h.adminCreateCategory)
+				r.Put("/categories/{id}", h.adminUpdateCategory)
+				r.Delete("/categories/{id}", h.adminDeleteCategory)
+				r.Get("/stats", h.adminGetStats)
+			})
 		})
 	})
 
@@ -212,8 +222,37 @@ func (h *Handler) authRequiredMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		userRole, _ := claims["role"].(string)
+
 		ctx := context.WithValue(r.Context(), userIDKey, int(userIDFloat))
+		ctx = context.WithValue(ctx, userRoleKey, userRole)
 		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func (h *Handler) chiefAdminRequiredMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.authRequiredMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			role, ok := r.Context().Value(userRoleKey).(string)
+			if !ok || role != "chief_admin" {
+				http.Error(w, "ошибка: доступ запрещен", http.StatusForbidden)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})).ServeHTTP(w, r)
+	})
+}
+
+func (h *Handler) establishmentAdminRequiredMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.authRequiredMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			role, ok := r.Context().Value(userRoleKey).(string)
+			if !ok || (role != "chief_admin" && role != "establishment_admin") {
+				http.Error(w, "ошибка: доступ запрещен", http.StatusForbidden)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})).ServeHTTP(w, r)
 	})
 }
 

@@ -55,9 +55,12 @@ func NewPostgresUserRepository(db *sql.DB) *PostgresUserRepository {
 }
 
 func (r *PostgresUserRepository) Create(ctx context.Context, u *models.User) error {
-	query := `INSERT INTO users (name, phone, password_hash, default_address) 
-	          VALUES ($1, $2, $3, $4) RETURNING id, created_at`
-	err := r.db.QueryRowContext(ctx, query, u.Name, u.Phone, u.PasswordHash, u.DefaultAddress).Scan(&u.ID, &u.CreatedAt)
+	if u.Role == "" {
+		u.Role = "user"
+	}
+	query := `INSERT INTO users (name, phone, password_hash, default_address, role) 
+	          VALUES ($1, $2, $3, $4, $5) RETURNING id, created_at`
+	err := r.db.QueryRowContext(ctx, query, u.Name, u.Phone, u.PasswordHash, u.DefaultAddress, u.Role).Scan(&u.ID, &u.CreatedAt)
 	if err != nil {
 		return fmt.Errorf("ошибка создания пользователя: %w", err)
 	}
@@ -65,9 +68,9 @@ func (r *PostgresUserRepository) Create(ctx context.Context, u *models.User) err
 }
 
 func (r *PostgresUserRepository) GetByID(ctx context.Context, id int) (*models.User, error) {
-	query := `SELECT id, name, phone, password_hash, default_address, created_at FROM users WHERE id = $1`
+	query := `SELECT id, name, phone, password_hash, default_address, role, created_at FROM users WHERE id = $1`
 	var u models.User
-	err := r.db.QueryRowContext(ctx, query, id).Scan(&u.ID, &u.Name, &u.Phone, &u.PasswordHash, &u.DefaultAddress, &u.CreatedAt)
+	err := r.db.QueryRowContext(ctx, query, id).Scan(&u.ID, &u.Name, &u.Phone, &u.PasswordHash, &u.DefaultAddress, &u.Role, &u.CreatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("пользователь не найден")
@@ -78,9 +81,9 @@ func (r *PostgresUserRepository) GetByID(ctx context.Context, id int) (*models.U
 }
 
 func (r *PostgresUserRepository) GetByPhone(ctx context.Context, phone string) (*models.User, error) {
-	query := `SELECT id, name, phone, password_hash, default_address, created_at FROM users WHERE phone = $1`
+	query := `SELECT id, name, phone, password_hash, default_address, role, created_at FROM users WHERE phone = $1`
 	var u models.User
-	err := r.db.QueryRowContext(ctx, query, phone).Scan(&u.ID, &u.Name, &u.Phone, &u.PasswordHash, &u.DefaultAddress, &u.CreatedAt)
+	err := r.db.QueryRowContext(ctx, query, phone).Scan(&u.ID, &u.Name, &u.Phone, &u.PasswordHash, &u.DefaultAddress, &u.Role, &u.CreatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("пользователь не найден")

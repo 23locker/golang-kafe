@@ -10,10 +10,12 @@ import (
 
 	"backend/internal/config"
 	"backend/internal/handlers"
+	"backend/internal/models"
 	"backend/internal/repositories"
 	"backend/internal/services"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func main() {
@@ -61,6 +63,21 @@ func main() {
 	orderServ := services.NewOrderService(orderRepo, productRepo)
 	resServ := services.NewReservationService(resRepo)
 	adminServ := services.NewAdminService(orderRepo, resRepo, productRepo)
+
+	// Инициализация главного администратора
+	ctx := context.Background()
+	_, err = userRepo.GetByPhone(ctx, "+7988548955")
+	if err != nil {
+		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("123456"), bcrypt.DefaultCost)
+		chiefAdmin := &models.User{
+			Name:         "Главный Администратор",
+			Phone:        "+7988548955",
+			PasswordHash: string(hashedPassword),
+			Role:         "chief_admin",
+		}
+		_ = userRepo.Create(ctx, chiefAdmin)
+		log.Println("Создан главный администратор: +7988548955")
+	}
 
 	h := handlers.NewHandler(authServ, prodServ, orderServ, resServ, adminServ, cfg.JWTSecret)
 

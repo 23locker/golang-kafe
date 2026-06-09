@@ -1,0 +1,27 @@
+# Секреты (НИКОГДА не коммитить!)
+.env
+*.env.local
+
+# Go build artifacts
+backend/app.exe
+backend/tmp_app.exe
+backend/*.exe
+
+# Go air (hot reload)
+backend/tmp/
+
+# Frontend build
+frontend/dist/
+frontend/node_modules/
+
+# Uploads (пользовательский контент)
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+*.swp

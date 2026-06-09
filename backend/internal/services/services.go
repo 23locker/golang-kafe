@@ -112,6 +112,7 @@ func (s *AuthServiceImpl) Login(ctx context.Context, req dto.LoginRequest) (stri
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"user_id": u.ID,
+		"role":    u.Role,
 		"exp":     time.Now().Add(24 * time.Hour).Unix(),
 	})
 

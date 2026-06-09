@@ -49,6 +49,7 @@
         name: string;
         phone: string;
         default_address: string | null;
+        role: string;
     }
 
     interface OrderItem {
@@ -247,13 +248,15 @@
             if (resRes.ok) {
                 adminReservations = await resRes.json();
             }
-            let statsUrl = "/api/admin/stats";
-            if (statsStartDate && statsEndDate) {
-                statsUrl += `?start_date=${statsStartDate}&end_date=${statsEndDate}`;
-            }
-            const statRes = await fetch(statsUrl);
-            if (statRes.ok) {
-                adminStats = await statRes.json();
+            if (currentUser?.role === 'chief_admin') {
+                let statsUrl = "/api/admin/stats";
+                if (statsStartDate && statsEndDate) {
+                    statsUrl += `?start_date=${statsStartDate}&end_date=${statsEndDate}`;
+                }
+                const statRes = await fetch(statsUrl);
+                if (statRes.ok) {
+                    adminStats = await statRes.json();
+                }
             }
         } catch (e) {
             console.error(e);
@@ -277,6 +280,9 @@
         const handleHash = () => {
             if (window.location.hash === "#admin") {
                 currentView = "admin";
+                if (currentUser && currentUser.role !== 'chief_admin' && adminTab === 'stats') {
+                    adminTab = 'orders';
+                }
                 fetchAdminData();
             } else if (window.location.hash === "#menu-view") {
                 currentView = "menu-view";
@@ -1414,13 +1420,24 @@
                                 >Контакты</a
                             >
                         </li>
-                        <li>
-                            <a
-                                href="#admin"
-                                class="text-brand-red/60 hover:text-brand-red transition-colors"
-                                >Админ-Панель</a
-                            >
-                        </li>
+                        {#if currentUser?.role === 'chief_admin'}
+                            <li>
+                                <a
+                                    href="#admin"
+                                    class="text-brand-red/60 hover:text-brand-red transition-colors"
+                                    >Админ-Панель</a
+                                >
+                            </li>
+                        {/if}
+                        {#if currentUser?.role === 'establishment_admin'}
+                            <li>
+                                <a
+                                    href="#admin"
+                                    class="text-brand-red/60 hover:text-brand-red transition-colors"
+                                    >Управление заведением</a
+                                >
+                            </li>
+                        {/if}
                     </ul>
                 </div>
                 <div class="flex items-center gap-8">
@@ -2119,16 +2136,18 @@
         >
             <!-- Admin Navigation Sidebar -->
             <aside class="w-full lg:w-64 space-y-2 flex-shrink-0">
-                <button
-                    onclick={() => (adminTab = "stats")}
-                    class="w-full text-left px-6 py-4 text-[11px] font-mono uppercase tracking-widest border transition-all cursor-pointer flex items-center gap-4 {adminTab ===
-                    'stats'
-                        ? 'bg-white text-black border-white'
-                        : 'bg-transparent text-white/60 hover:text-white border-white/5 hover:border-white/20'}"
-                >
-                    <TrendingUp class="w-4 h-4" />
-                    <span>Статистика</span>
-                </button>
+                {#if currentUser?.role === 'chief_admin'}
+                    <button
+                        onclick={() => (adminTab = "stats")}
+                        class="w-full text-left px-6 py-4 text-[11px] font-mono uppercase tracking-widest border transition-all cursor-pointer flex items-center gap-4 {adminTab ===
+                        'stats'
+                            ? 'bg-white text-black border-white'
+                            : 'bg-transparent text-white/60 hover:text-white border-white/5 hover:border-white/20'}"
+                    >
+                        <TrendingUp class="w-4 h-4" />
+                        <span>Статистика</span>
+                    </button>
+                {/if}
 
                 <button
                     onclick={() => (adminTab = "orders")}
@@ -2152,27 +2171,29 @@
                     <span>Бронирования ({adminReservations.length})</span>
                 </button>
 
-                <button
-                    onclick={() => (adminTab = "menu")}
-                    class="w-full text-left px-6 py-4 text-[11px] font-mono uppercase tracking-widest border transition-all cursor-pointer flex items-center gap-4 {adminTab ===
-                    'menu'
-                        ? 'bg-white text-black border-white'
-                        : 'bg-transparent text-white/60 hover:text-white border-white/5 hover:border-white/20'}"
-                >
-                    <Layers class="w-4 h-4" />
-                    <span>Управление меню</span>
-                </button>
+                {#if currentUser?.role === 'chief_admin'}
+                    <button
+                        onclick={() => (adminTab = "menu")}
+                        class="w-full text-left px-6 py-4 text-[11px] font-mono uppercase tracking-widest border transition-all cursor-pointer flex items-center gap-4 {adminTab ===
+                        'menu'
+                            ? 'bg-white text-black border-white'
+                            : 'bg-transparent text-white/60 hover:text-white border-white/5 hover:border-white/20'}"
+                    >
+                        <Layers class="w-4 h-4" />
+                        <span>Управление меню</span>
+                    </button>
 
-                <button
-                    onclick={() => (adminTab = "categories")}
-                    class="w-full text-left px-6 py-4 text-[11px] font-mono uppercase tracking-widest border transition-all cursor-pointer flex items-center gap-4 {adminTab ===
-                    'categories'
-                        ? 'bg-white text-black border-white'
-                        : 'bg-transparent text-white/60 hover:text-white border-white/5 hover:border-white/20'}"
-                >
-                    <Layers class="w-4 h-4" />
-                    <span>Категории ({categories.length})</span>
-                </button>
+                    <button
+                        onclick={() => (adminTab = "categories")}
+                        class="w-full text-left px-6 py-4 text-[11px] font-mono uppercase tracking-widest border transition-all cursor-pointer flex items-center gap-4 {adminTab ===
+                        'categories'
+                            ? 'bg-white text-black border-white'
+                            : 'bg-transparent text-white/60 hover:text-white border-white/5 hover:border-white/20'}"
+                    >
+                        <Layers class="w-4 h-4" />
+                        <span>Категории ({categories.length})</span>
+                    </button>
+                {/if}
             </aside>
 
             <!-- Admin Main Area -->

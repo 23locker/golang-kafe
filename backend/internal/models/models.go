@@ -8,6 +8,7 @@ type User struct {
 	Phone          string
 	PasswordHash   string
 	DefaultAddress *string
+	Role           string
 	CreatedAt      time.Time
 }
 

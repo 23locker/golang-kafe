@@ -18,6 +18,7 @@ type UserResponse struct {
 	Name           string  `json:"name"`
 	Phone          string  `json:"phone"`
 	DefaultAddress *string `json:"default_address"`
+	Role           string  `json:"role"`
 }
 
 type CategoryResponse struct {
