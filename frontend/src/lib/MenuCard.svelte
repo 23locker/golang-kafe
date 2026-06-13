@@ -30,7 +30,6 @@
   <div class="space-y-6 relative z-10">
     <div class="space-y-1">
       <h4 class="font-medium text-[10px] leading-relaxed line-clamp-2 uppercase tracking-widest text-white/60 group-hover:text-white transition-colors">{item.name}</h4>
-      <p class="text-[10px] font-mono text-white/20">Class: Premium Tier</p>
     </div>
     
     <div class="flex items-center justify-between pt-4 border-t border-white/5">

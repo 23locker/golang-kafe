@@ -24,6 +24,7 @@
     import Instagram from "./lib/icons/Instagram.svelte";
     import Facebook from "./lib/icons/Facebook.svelte";
     import MenuCategory from "./lib/MenuCategory.svelte";
+    import MenuCard from "./lib/MenuCard.svelte";
     import type { Dish } from "./lib/constants";
 
     interface Category {
@@ -78,10 +79,13 @@
         reserve_time: string;
         guests_count: number;
         comment: string;
+        status: string;
     }
 
-    // Navigation state: 'home' | 'admin' | 'menu-view'
-    let currentView = $state<"home" | "admin" | "menu-view">("home");
+    // Navigation state: 'home' | 'admin' | 'menu' | 'blog' | 'about'
+    let currentView = $state<"home" | "admin" | "menu" | "blog" | "about">(
+        "home",
+    );
     let adminTab = $state<
         "stats" | "orders" | "reservations" | "menu" | "categories"
     >("stats");
@@ -108,6 +112,79 @@
 
     // Auth state
     let currentUser = $state<UserInfo | null>(null);
+
+    interface BlogPost {
+        id: string;
+        title: string;
+        subtitle: string;
+        date: string;
+        readTime: string;
+        tag: string;
+        image: string;
+        content: string;
+    }
+
+    let blogPosts: BlogPost[] = [
+        {
+            id: "1",
+            title: "Искусство бурятских бууз",
+            subtitle: "Секреты идеального бульона и лепки в 33 защипа",
+            date: "12 Мая, 2026",
+            readTime: "5 мин чтения",
+            tag: "Традиции",
+            image: "/images/hero_buuzy_plate.png",
+            content:
+                "Настоящие буузы — это не просто блюдо, а кулинарный шедевр с вековой историей. Форма бууз напоминает юрту, традиционное жилище кочевников. Отверстие наверху символизирует дымоход, а складочки (в идеале их должно быть ровно 33) символизируют складки юрты. Главное правило при употреблении бууз — не пролить ни капли ароматного мясного бульона, который скапливается внутри при приготовлении на пару. Для этого буузу аккуратно надкусывают сбоку, выпивают горячий бульон, а затем съедают остальное. В нашем кафе мы готовим фарш исключительно вручную, используя только свежую говядину и свинину, лук и специи. Никаких искусственных добавок — только чистый вкус традиций.",
+        },
+        {
+            id: "2",
+            title: "Шулэн и Бухлёр: супы кочевников",
+            subtitle:
+                "Как традиционные бульоны согревали в суровые степные морозы",
+            date: "28 Апреля, 2026",
+            readTime: "4 мин чтения",
+            tag: "Кухня",
+            image: "/images/hero_steak_plate_1779197902033.png",
+            content:
+                "Для кочевых народов Бурятии мясной бульон всегда был основой рациона в холодное время года. Бухлёр — это квинтэссенция простоты и питательности. Он готовится из крупных кусков свежей баранины или говядины с добавлением только лука и соли. Ничего лишнего, чтобы не перебивать вкус чистого мяса. Шулэн же представляет собой домашнюю лапшу в наваристом бульоне с мелко нарезанным мясом. Эти супы не просто насыщают, они обладают целебными свойствами, помогают при простуде и быстро восстанавливают силы после долгого пути.",
+        },
+        {
+            id: "3",
+            title: "Сибирское золото: польза облепихи",
+            subtitle: "Почему облепиховый морс — лучший выбор в нашем кафе",
+            date: "15 Марта, 2026",
+            readTime: "3 мин чтения",
+            tag: "Ингредиенты",
+            image: "/images/creamy_mushrooms_plate_1779198170202.png",
+            content:
+                "Облепиха — уникальная ягода, произрастающая в суровых климатических условиях Сибири и Забайкалья. Её называют сибирским ананасом за яркий кисло-сладкий вкус. Облепиха богата витаминами C, E, группы B, каротином и полезными жирными кислотами. Наш облепиховый морс готовится по особой технологии без кипячения, что позволяет сохранить все витамины и полезные свойства ягоды. Он отлично дополняет сытные мясные блюда, помогая пищеварению и оставляя приятное освежающее послевкусие.",
+        },
+        {
+            id: "4",
+            title: "Рецепты предков: 12 лет качества",
+            subtitle: "История создания нашего уютного заведения",
+            date: "10 Февраля, 2026",
+            readTime: "6 мин чтения",
+            tag: "О нас",
+            image: "/images/fresh_salad_plate_1779198150233.png",
+            content:
+                "Кафе «Байкал Буузы» было основано 12 лет назад с простой, но амбициозной целью — поделиться богатством бурятской кулинарной культуры с миром. Мы начинали с небольшого семейного кафе, где сами лепили буузы для первых гостей. С тех пор мы расширились, но сохранили главное — бескомпромиссное отношение к качеству продуктов и верность оригинальным рецептам. Каждый день наши повара приходят на кухню ранним утром, чтобы замесить свежее тесто и приготовить свежий фарш. Мы верим, что еда, приготовленная с душой, сближает людей.",
+        },
+    ];
+
+    let selectedBlogPost = $state<BlogPost | null>(null);
+
+    // Derived popular dishes list for home page statistcs
+    let popularDishes = $derived(
+        dishes.filter(
+            (d) =>
+                d.name.includes("Классические") ||
+                d.name.includes("бараниной") ||
+                d.name.includes("Шулэн") ||
+                d.name.includes("Облепиховый"),
+        ),
+    );
+
     let isAuthModalOpen = $state(false);
     let authMode = $state<"login" | "register">("login");
     let authName = $state("");
@@ -189,15 +266,27 @@
                     .map((p) => {
                         let img = p.image_url || "/images/placeholder.jpg";
                         // Map default database seed image paths to actual local files
-                        if (img === "/images/buuzy-classic.jpg") img = "/images/hero_buuzy_plate.png";
-                        else if (img === "/images/buuzy-lamb.jpg") img = "/images/hero_buuzy_plate.png";
-                        else if (img === "/images/shulen.jpg") img = "/images/hero_steak_plate_1779197902033.png";
-                        else if (img === "/images/buhler.jpg") img = "/images/creamy_mushrooms_plate_1779198170202.png";
-                        else if (img === "/images/asian-salad.jpg") img = "/images/fresh_salad_plate_1779198150233.png";
-                        else if (img === "/images/bird-cherry-cake.jpg") img = "/images/salmon_steak_plate_1779197942330.png";
-                        else if (img === "/images/milky-tea.jpg") img = "/images/grilled_fish_plate_1779197923227.png";
-                        else if (img === "/images/sea-buckthorn-drink.jpg") img = "/images/creamy_mushrooms_plate_1779198170202.png";
-                        
+                        if (img === "/images/buuzy-classic.jpg")
+                            img = "/images/hero_buuzy_plate.png";
+                        else if (img === "/images/buuzy-lamb.jpg")
+                            img = "/images/hero_buuzy_plate.png";
+                        else if (img === "/images/shulen.jpg")
+                            img = "/images/hero_steak_plate_1779197902033.png";
+                        else if (img === "/images/buhler.jpg")
+                            img =
+                                "/images/creamy_mushrooms_plate_1779198170202.png";
+                        else if (img === "/images/asian-salad.jpg")
+                            img = "/images/fresh_salad_plate_1779198150233.png";
+                        else if (img === "/images/bird-cherry-cake.jpg")
+                            img =
+                                "/images/salmon_steak_plate_1779197942330.png";
+                        else if (img === "/images/milky-tea.jpg")
+                            img =
+                                "/images/grilled_fish_plate_1779197923227.png";
+                        else if (img === "/images/sea-buckthorn-drink.jpg")
+                            img =
+                                "/images/creamy_mushrooms_plate_1779198170202.png";
+
                         return {
                             id: String(p.id),
                             name: p.name,
@@ -304,8 +393,18 @@
                     adminTab = "orders";
                 }
                 fetchAdminData();
-            } else if (window.location.hash === "#menu-view") {
-                currentView = "menu-view";
+            } else if (window.location.hash === "#menu") {
+                currentView = "menu";
+            } else if (window.location.hash === "#blog") {
+                currentView = "blog";
+            } else if (window.location.hash === "#about") {
+                currentView = "about";
+            } else if (
+                window.location.hash === "#reviews" ||
+                window.location.hash === "#tour" ||
+                window.location.hash === "#contacts"
+            ) {
+                currentView = "home";
             } else {
                 currentView = "home";
             }
@@ -1105,7 +1204,11 @@
                                             <p
                                                 class="text-xs text-white/40 font-mono"
                                             >
-                                                {res.reserve_date ? new Date(res.reserve_date).toLocaleDateString() : ""} в {res.reserve_time}
+                                                {res.reserve_date
+                                                    ? new Date(
+                                                          res.reserve_date,
+                                                      ).toLocaleDateString()
+                                                    : ""} в {res.reserve_time}
                                             </p>
                                             {#if res.comment}
                                                 <p
@@ -1374,7 +1477,7 @@
         </div>
     {/if}
 
-    {#if currentView === "home" || currentView === "menu-view"}
+    {#if currentView === "home" || currentView === "menu" || currentView === "blog" || currentView === "about"}
         <!-- Navigation -->
         <nav
             class="fixed top-0 left-0 right-0 z-40 bg-brand-dark/80 bg-blur border-b border-white/5 py-6"
@@ -1409,11 +1512,29 @@
                     >
                         <li>
                             <a
-                                href="#menu-view"
+                                href="#menu"
                                 class="hover:text-white transition-colors {currentView ===
-                                'menu-view'
+                                'menu'
                                     ? 'text-white border-b border-brand-red pb-1'
                                     : ''}">Меню</a
+                            >
+                        </li>
+                        <li>
+                            <a
+                                href="#blog"
+                                class="hover:text-white transition-colors {currentView ===
+                                'blog'
+                                    ? 'text-white border-b border-brand-red pb-1'
+                                    : ''}">Блог</a
+                            >
+                        </li>
+                        <li>
+                            <a
+                                href="#about"
+                                class="hover:text-white transition-colors {currentView ===
+                                'about'
+                                    ? 'text-white border-b border-brand-red pb-1'
+                                    : ''}">О нас</a
                             >
                         </li>
                         <li>
@@ -1471,7 +1592,8 @@
                         <button
                             onclick={() => {
                                 isProfileOpen = true;
-                                editAddress = currentUser?.default_address || "";
+                                editAddress =
+                                    currentUser?.default_address || "";
                                 fetchUserHistory();
                             }}
                             class="flex items-center gap-2 text-[10px] font-mono text-white/60 hover:text-white transition-colors cursor-pointer"
@@ -1539,7 +1661,7 @@
                             ></span>
                             <span
                                 class="text-[10px] uppercase tracking-widest text-white/60 font-bold font-mono"
-                                >Традиционная бурятская кухня • Est. 2024</span
+                                >Традиционная бурятская кухня • Est. 2014</span
                             >
                         </div>
 
@@ -1565,7 +1687,7 @@
 
                         <div class="flex flex-col sm:flex-row gap-4">
                             <a
-                                href="#menu-view"
+                                href="#menu"
                                 class="px-10 py-5 bg-white text-black text-center text-xs font-bold uppercase tracking-widest rounded-sm shadow-2xl hover:bg-brand-red hover:text-white transition-all duration-500 cursor-pointer"
                             >
                                 Перейти к меню
@@ -1601,53 +1723,60 @@
                 </div>
             </section>
 
-            <!-- Stats Bar -->
-            <section class="border-y border-white/10 bg-white/[0.01]">
-                <div
-                    class="w-full grid grid-cols-2 md:grid-cols-4 px-6 md:px-12 lg:px-20 py-12 gap-8"
-                >
-                    <div class="flex flex-col">
-                        <span
-                            class="text-[10px] uppercase tracking-[0.2em] text-white/30 mb-2 font-mono"
-                            >Приготовлено бууз</span
+            <!-- Popular Products Section -->
+            <section
+                id="popular"
+                class="py-32 px-6 md:px-12 lg:px-20 border-t border-white/5 bg-[#030303]"
+            >
+                <div class="w-full space-y-16">
+                    <div class="text-center space-y-4">
+                        <div
+                            class="inline-flex items-center gap-2 px-3 py-1 bg-white/5 border border-white/10 rounded-full"
                         >
-                        <span class="text-3xl font-mono tracking-tighter"
-                            >50,000+</span
+                            <span class="w-2 h-2 bg-brand-red rounded-full"
+                            ></span>
+                            <span
+                                class="text-[9px] uppercase tracking-widest text-white/60 font-bold font-mono"
+                                >Выбор гостей</span
+                            >
+                        </div>
+                        <h2
+                            class="text-5xl font-display font-extralight uppercase tracking-tight text-white"
                         >
+                            Популярно <span
+                                class="font-serif italic text-white/20"
+                                >По статистике</span
+                            >
+                        </h2>
+                        <p
+                            class="max-w-md mx-auto text-white/40 text-sm font-light leading-relaxed"
+                        >
+                            Наши самые заказываемые традиционные блюда,
+                            заслужившие признание сотен гостей.
+                        </p>
                     </div>
-                    <div class="flex flex-col border-l border-white/10 pl-8">
-                        <span
-                            class="text-[10px] uppercase tracking-[0.2em] text-white/30 mb-2 font-mono"
-                            >Свежие ингредиенты</span
+
+                    {#if popularDishes.length === 0}
+                        <p class="text-white/40 text-center font-mono">
+                            Загрузка популярных блюд...
+                        </p>
+                    {:else}
+                        <div
+                            class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8"
                         >
-                        <span class="text-3xl font-mono tracking-tighter"
-                            >100%</span
-                        >
-                    </div>
-                    <div
-                        class="flex flex-col border-l border-white/10 pl-8 shadow-[inset_0_0_20px_rgba(16,185,129,0.05)]"
-                    >
-                        <span
-                            class="text-[10px] uppercase tracking-[0.2em] text-accent-emerald/40 mb-2 font-mono"
-                            >Индекс свежести</span
-                        >
-                        <span
-                            class="text-3xl font-mono tracking-tighter text-accent-emerald"
-                            >A-Grade</span
-                        >
-                    </div>
-                    <div class="flex flex-col border-l border-white/10 pl-8">
-                        <span
-                            class="text-[10px] uppercase tracking-[0.2em] text-white/30 mb-2 font-mono"
-                            >Рецепты предков</span
-                        >
-                        <span class="text-3xl font-mono tracking-tighter"
-                            >12 лет</span
-                        >
-                    </div>
+                            {#each popularDishes as item}
+                                <MenuCard
+                                    {item}
+                                    qty={getQuantity(item.id)}
+                                    onAdd={() => addToCart(item.id)}
+                                    onRemove={() => removeFromCart(item.id)}
+                                />
+                            {/each}
+                        </div>
+                    {/if}
                 </div>
             </section>
-        {:else if currentView === "menu-view"}
+        {:else if currentView === "menu"}
             <!-- Dedicated Menu View Header -->
             <section
                 class="relative pt-48 pb-12 px-6 md:px-12 lg:px-20 overflow-hidden bg-[#030303]"
@@ -1681,91 +1810,406 @@
                     </p>
                 </div>
             </section>
-        {/if}
 
-        <!-- Catalog Section -->
-        <section
-            id="menu"
-            class="py-40 px-6 md:px-12 lg:px-20 relative bg-[#030303]"
-        >
-            <div class="w-full space-y-32">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-20 items-end">
-                    <div class="space-y-6">
-                        <h2
-                            class="text-[10rem] font-display font-black uppercase tracking-tighter text-white/5 absolute -top-20 left-0 pointer-events-none overflow-hidden select-none"
-                        >
-                            МЕНЮ
-                        </h2>
-                        <h2
-                            class="text-6xl font-display font-extralight uppercase tracking-tight relative z-10"
-                        >
-                            Кулинарные <span
-                                class="font-serif italic text-white/20"
-                                >Протоколы</span
+            <!-- Catalog Section -->
+            <section
+                id="menu"
+                class="py-40 px-6 md:px-12 lg:px-20 relative bg-[#030303]"
+            >
+                <div class="w-full space-y-32">
+                    <div
+                        class="grid grid-cols-1 md:grid-cols-2 gap-20 items-end"
+                    >
+                        <div class="space-y-6">
+                            <h2
+                                class="text-[10rem] font-display font-black uppercase tracking-tighter text-white/5 absolute -top-20 left-0 pointer-events-none overflow-hidden select-none"
                             >
-                        </h2>
-                        <p
-                            class="max-w-md text-white/40 text-sm leading-relaxed font-light"
-                        >
-                            Наше меню основывается на традиционных вкусах
-                            степной Азии. Каждое блюдо — это баланс специй и
-                            свежего мяса.
-                        </p>
+                                МЕНЮ
+                            </h2>
+                            <h2
+                                class="text-6xl font-display font-extralight uppercase tracking-tight relative z-10"
+                            >
+                                Кулинарные <span
+                                    class="font-serif italic text-white/20"
+                                    >Протоколы</span
+                                >
+                            </h2>
+                            <p
+                                class="max-w-md text-white/40 text-sm leading-relaxed font-light"
+                            >
+                                Наше меню основывается на традиционных вкусах
+                                степной Азии. Каждое блюдо — это баланс специй и
+                                свежего мяса.
+                            </p>
+                        </div>
+
+                        <div class="flex flex-col items-end gap-6">
+                            <div
+                                class="inline-flex bg-white/5 p-1 border border-white/10 rounded-sm font-mono"
+                            >
+                                <button
+                                    onclick={() => (deliveryMode = "delivery")}
+                                    class="px-8 py-3 text-[10px] font-bold uppercase tracking-widest transition-all cursor-pointer {deliveryMode ===
+                                    'delivery'
+                                        ? 'bg-white text-black'
+                                        : 'text-white/40 hover:text-white'}"
+                                >
+                                    Доставка
+                                </button>
+                                <button
+                                    onclick={() => (deliveryMode = "bar")}
+                                    class="px-8 py-3 text-[10px] font-bold uppercase tracking-widest transition-all cursor-pointer {deliveryMode ===
+                                    'bar'
+                                        ? 'bg-white text-black'
+                                        : 'text-white/40 hover:text-white'}"
+                                >
+                                    В зале
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
-                    <div class="flex flex-col items-end gap-6">
-                        <div
-                            class="inline-flex bg-white/5 p-1 border border-white/10 rounded-sm font-mono"
+                    <div class="space-y-40">
+                        {#if categories.length === 0}
+                            <p class="text-white/40 text-center font-mono">
+                                Загрузка меню...
+                            </p>
+                        {:else}
+                            {#each categories as cat}
+                                {@const catDishes = dishes.filter(
+                                    (d) => d.category === cat.slug,
+                                )}
+                                {#if catDishes.length > 0}
+                                    <MenuCategory
+                                        title={cat.name}
+                                        subtitle={`${cat.name} Section`}
+                                        dishes={catDishes}
+                                        isExpanded={true}
+                                        toggleExpand={() => {}}
+                                        getQty={getQuantity}
+                                        onAdd={addToCart}
+                                        onRemove={removeFromCart}
+                                    />
+                                {/if}
+                            {/each}
+                        {/if}
+                    </div>
+                </div>
+            </section>
+        {:else if currentView === "blog"}
+            <!-- Dedicated Blog Header -->
+            <section
+                class="relative pt-48 pb-12 px-6 md:px-12 lg:px-20 overflow-hidden bg-[#030303]"
+            >
+                <div
+                    class="absolute top-0 right-0 w-[50%] h-[100%] bg-white/[0.01] -skew-x-12 translate-x-1/2 pointer-events-none"
+                />
+                <div class="w-full text-center space-y-6 relative z-10">
+                    <div
+                        class="inline-flex items-center gap-2 px-3 py-1 bg-white/5 border border-white/10 rounded-full"
+                    >
+                        <span class="w-2 h-2 bg-brand-red rounded-full"></span>
+                        <span
+                            class="text-[9px] uppercase tracking-widest text-white/60 font-bold font-mono"
+                            >Кулинарные хроники</span
                         >
-                            <button
-                                onclick={() => (deliveryMode = "delivery")}
-                                class="px-8 py-3 text-[10px] font-bold uppercase tracking-widest transition-all cursor-pointer {deliveryMode ===
-                                'delivery'
-                                    ? 'bg-white text-black'
-                                    : 'text-white/40 hover:text-white'}"
+                    </div>
+                    <h1
+                        class="text-5xl lg:text-7xl font-display font-extralight uppercase tracking-tight text-white leading-none"
+                    >
+                        Наш <span class="font-serif italic text-white/20"
+                            >Блог</span
+                        >
+                    </h1>
+                    <p
+                        class="max-w-xl mx-auto text-white/40 text-sm leading-relaxed font-light"
+                    >
+                        Истории о традициях бурятской кухни, секретах
+                        приготовления идеальных блюд и новостях нашего
+                        заведения.
+                    </p>
+                </div>
+            </section>
+
+            <!-- Blog Posts Grid -->
+            <section class="py-20 px-6 md:px-12 lg:px-20 bg-[#030303]">
+                <div class="w-full grid grid-cols-1 md:grid-cols-2 gap-12">
+                    {#each blogPosts as post}
+                        <button
+                            onclick={() => (selectedBlogPost = post)}
+                            class="text-left bg-white/[0.01] border border-white/5 p-8 group transition-all duration-700 hover:border-white/20 hover:-translate-y-1 relative overflow-hidden flex flex-col justify-between h-[450px] cursor-pointer"
+                        >
+                            <div
+                                class="relative w-full h-48 overflow-hidden bg-[#0a0a0a] mb-6"
                             >
-                                Доставка
-                            </button>
-                            <button
-                                onclick={() => (deliveryMode = "bar")}
-                                class="px-8 py-3 text-[10px] font-bold uppercase tracking-widest transition-all cursor-pointer {deliveryMode ===
-                                'bar'
-                                    ? 'bg-white text-black'
-                                    : 'text-white/40 hover:text-white'}"
+                                <img
+                                    src={post.image}
+                                    alt={post.title}
+                                    class="w-full h-full object-cover grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100 group-hover:scale-105 transition-all duration-1000 ease-out"
+                                />
+                                <span
+                                    class="absolute top-4 left-4 bg-black/80 border border-white/10 px-3 py-1 text-[8px] font-mono uppercase tracking-widest text-white"
+                                >
+                                    {post.tag}
+                                </span>
+                            </div>
+
+                            <div class="flex-1 space-y-4">
+                                <div
+                                    class="flex items-center gap-4 text-[10px] font-mono text-white/40"
+                                >
+                                    <span>{post.date}</span>
+                                    <span>•</span>
+                                    <span>{post.readTime}</span>
+                                </div>
+                                <h3
+                                    class="text-2xl font-display font-light uppercase tracking-tight text-white group-hover:text-brand-red transition-colors duration-500"
+                                >
+                                    {post.title}
+                                </h3>
+                                <p
+                                    class="text-xs text-white/50 font-light line-clamp-3 leading-relaxed"
+                                >
+                                    {post.subtitle}
+                                </p>
+                            </div>
+
+                            <div
+                                class="mt-6 pt-4 border-t border-white/5 flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.2em] text-white/40 group-hover:text-white transition-colors duration-500"
                             >
-                                В зале
-                            </button>
+                                <span>Читать статью</span>
+                                <ChevronRight
+                                    class="w-3 h-3 text-white/40 group-hover:text-white transition-colors"
+                                />
+                            </div>
+                        </button>
+                    {/each}
+                </div>
+            </section>
+        {:else if currentView === "about"}
+            <!-- Dedicated About Header -->
+            <section
+                class="relative pt-48 pb-12 px-6 md:px-12 lg:px-20 overflow-hidden bg-[#030303]"
+            >
+                <div
+                    class="absolute top-0 right-0 w-[50%] h-[100%] bg-white/[0.01] -skew-x-12 translate-x-1/2 pointer-events-none"
+                />
+                <div class="w-full text-center space-y-6 relative z-10">
+                    <div
+                        class="inline-flex items-center gap-2 px-3 py-1 bg-white/5 border border-white/10 rounded-full"
+                    >
+                        <span class="w-2 h-2 bg-brand-red rounded-full"></span>
+                        <span
+                            class="text-[9px] uppercase tracking-widest text-white/60 font-bold font-mono"
+                            >История и философия</span
+                        >
+                    </div>
+                    <h1
+                        class="text-5xl lg:text-7xl font-display font-extralight uppercase tracking-tight text-white leading-none"
+                    >
+                        О <span class="font-serif italic text-white/20"
+                            >Нас</span
+                        >
+                    </h1>
+                    <p
+                        class="max-w-xl mx-auto text-white/40 text-sm leading-relaxed font-light"
+                    >
+                        Байкал Буузы — хранители подлинного вкуса степной Азии.
+                        Сочетаем вековые традиции и высочайшие гастрономические
+                        стандарты.
+                    </p>
+                </div>
+            </section>
+
+            <!-- About Content Sections -->
+            <section
+                class="py-20 px-6 md:px-12 lg:px-20 bg-[#030303] border-t border-white/5"
+            >
+                <div class="w-full space-y-32">
+                    <!-- Section 1: History -->
+                    <div
+                        class="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center"
+                    >
+                        <div class="space-y-8">
+                            <span
+                                class="text-[10px] uppercase tracking-[0.4em] text-brand-red font-bold font-mono"
+                                >Наше Наследие</span
+                            >
+                            <h2
+                                class="text-5xl font-display font-extralight uppercase tracking-tight text-white"
+                            >
+                                Дорога длиной в <br />
+                                <span
+                                    class="font-serif italic text-white/30 lowercase font-medium"
+                                    >12 лет</span
+                                >
+                            </h2>
+                            <div class="h-px w-20 bg-white/20" />
+                            <p
+                                class="text-white/50 text-sm leading-relaxed font-light"
+                            >
+                                Кафе «Байкал Буузы» зародилось как семейный
+                                гастрономический проект. Нашей миссией стало
+                                сохранение подлинного кулинарного наследия
+                                бурятского народа и его популяризация в
+                                европейской части страны.
+                            </p>
+                            <p
+                                class="text-white/50 text-sm leading-relaxed font-light"
+                            >
+                                За годы работы мы приготовили более 1 000 000
+                                бууз, завоевали признание тысяч постоянных
+                                гостей и сформировали бескомпромиссные стандарты
+                                свежести сырья. Каждое утро наша команда
+                                начинает с ручного замеса теста и тщательной
+                                переработки отборного охлажденного мяса.
+                            </p>
+                        </div>
+                        <div
+                            class="relative border border-white/10 p-2 bg-white/[0.01]"
+                        >
+                            <img
+                                src="/images/hero_buuzy_plate.png"
+                                alt="Традиционные буузы"
+                                class="w-full object-cover grayscale contrast-125 brightness-90 hover:grayscale-0 transition-all duration-1000"
+                            />
+                        </div>
+                    </div>
+
+                    <!-- Section 2: Values (3 Columns) -->
+                    <div class="border-t border-white/5 pt-32">
+                        <div class="text-center space-y-4 mb-20">
+                            <span
+                                class="text-[10px] uppercase tracking-[0.4em] text-brand-red font-bold font-mono"
+                                >Три Столпа</span
+                            >
+                            <h2
+                                class="text-4xl font-display font-extralight uppercase text-white"
+                            >
+                                Наши Главные Ценности
+                            </h2>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-12">
+                            <div
+                                class="border border-white/5 bg-white/[0.01] p-10 space-y-6"
+                            >
+                                <span
+                                    class="text-xs font-mono text-white/20 uppercase tracking-widest"
+                                    >01 / Рецепты</span
+                                >
+                                <h3
+                                    class="text-xl font-display font-light uppercase text-white"
+                                >
+                                    Традиции
+                                </h3>
+                                <p
+                                    class="text-xs text-white/40 leading-relaxed font-light"
+                                >
+                                    Мы готовим исключительно по старинным
+                                    рецептам бурят-монгольских кочевников.
+                                    Никаких компромиссов с фастфуд-технологиями:
+                                    ручная лепка, традиционный фарш,
+                                    приготовление на пару.
+                                </p>
+                            </div>
+                            <div
+                                class="border border-white/5 bg-white/[0.01] p-10 space-y-6"
+                            >
+                                <span
+                                    class="text-xs font-mono text-white/20 uppercase tracking-widest"
+                                    >02 / Стандарты</span
+                                >
+                                <h3
+                                    class="text-xl font-display font-light uppercase text-white"
+                                >
+                                    Свежесть
+                                </h3>
+                                <p
+                                    class="text-xs text-white/40 leading-relaxed font-light"
+                                >
+                                    Наш индекс свежести — A-Grade. Мы не
+                                    используем замороженные полуфабрикаты или
+                                    консерванты. Ингредиенты закупаются
+                                    ежедневно у проверенных местных фермеров.
+                                </p>
+                            </div>
+                            <div
+                                class="border border-white/5 bg-white/[0.01] p-10 space-y-6"
+                            >
+                                <span
+                                    class="text-xs font-mono text-white/20 uppercase tracking-widest"
+                                    >03 / Душа</span
+                                >
+                                <h3
+                                    class="text-xl font-display font-light uppercase text-white"
+                                >
+                                    Гостеприимство
+                                </h3>
+                                <p
+                                    class="text-xs text-white/40 leading-relaxed font-light"
+                                >
+                                    Каждый гость для нас — почетный визитер в
+                                    юрте. Мы стремимся передать атмосферу
+                                    домашнего сибирского уюта, где каждого
+                                    окружают заботой и щедрым угощением.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 3: Chef Bio -->
+                    <div
+                        class="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center border-t border-white/5 pt-32"
+                    >
+                        <div
+                            class="relative order-last lg:order-first border border-white/10 p-2 bg-white/[0.01]"
+                        >
+                            <img
+                                src="/images/hero_steak_plate_1779197902033.png"
+                                alt="Наш Шеф-повар"
+                                class="w-full object-cover grayscale contrast-125 brightness-75 hover:grayscale-0 transition-all duration-1000"
+                            />
+                        </div>
+                        <div class="space-y-8">
+                            <span
+                                class="text-[10px] uppercase tracking-[0.4em] text-brand-red font-bold font-mono"
+                                >Мастер Кухни</span
+                            >
+                            <h2
+                                class="text-5xl font-display font-extralight uppercase tracking-tight text-white"
+                            >
+                                Шеф-Повар <br />
+                                <span
+                                    class="font-serif italic text-white/30 lowercase font-medium"
+                                    >Баир Дамдинов</span
+                                >
+                            </h2>
+                            <div class="h-px w-20 bg-white/20" />
+                            <p
+                                class="text-white/50 text-sm leading-relaxed font-light"
+                            >
+                                Баир Дамдинов — потомственный шеф-повар,
+                                посвятивший более 20 лет изучению и
+                                совершенствованию искусства бурятской и
+                                монгольской кухни. Его рецепты передавались из
+                                поколения в поколение в его семье из Агинских
+                                степей.
+                            </p>
+                            <p
+                                class="text-white/50 text-sm leading-relaxed font-light"
+                            >
+                                «Еда — это способ передать историю народа.
+                                Каждая бууза содержит в себе тепло степного
+                                ветра, память о предках и искреннее тепло рук
+                                мастера. Я рад приветствовать вас в нашем
+                                заведении и поделиться вкусами моего детства».
+                            </p>
                         </div>
                     </div>
                 </div>
-
-                <div class="space-y-40">
-                    {#if categories.length === 0}
-                        <p class="text-white/40 text-center font-mono">
-                            Загрузка меню...
-                        </p>
-                    {:else}
-                        {#each categories as cat}
-                            {@const catDishes = dishes
-                                .filter((d) => d.category === cat.slug)
-                                .slice(0, 4)}
-                            {#if catDishes.length > 0}
-                                <MenuCategory
-                                    title={cat.name}
-                                    subtitle={`${cat.name} Section`}
-                                    dishes={catDishes}
-                                    isExpanded={true}
-                                    toggleExpand={() => {}}
-                                    getQty={getQuantity}
-                                    onAdd={addToCart}
-                                    onRemove={removeFromCart}
-                                />
-                            {/if}
-                        {/each}
-                    {/if}
-                </div>
-            </div>
-        </section>
+            </section>
+        {/if}
 
         {#if currentView === "home"}
             <!-- Table Booking Section -->
@@ -2084,9 +2528,23 @@
                 >
                     <li>
                         <a
-                            href="#menu-view"
+                            href="#menu"
                             class="hover:text-brand-red transition-colors"
                             >Меню</a
+                        >
+                    </li>
+                    <li>
+                        <a
+                            href="#blog"
+                            class="hover:text-brand-red transition-colors"
+                            >Блог</a
+                        >
+                    </li>
+                    <li>
+                        <a
+                            href="#about"
+                            class="hover:text-brand-red transition-colors"
+                            >О нас</a
                         >
                     </li>
                     <li>
@@ -2116,6 +2574,80 @@
                 </ul>
             </div>
         </footer>
+
+        <!-- Blog Article Detail Overlay -->
+        {#if selectedBlogPost}
+            <div
+                transition:fade={{ duration: 400 }}
+                class="fixed inset-0 z-50 bg-brand-dark/95 backdrop-blur-md flex items-center justify-center p-6 md:p-12 overflow-y-auto"
+            >
+                <div
+                    transition:fly={{ y: 50, duration: 600 }}
+                    class="w-full max-w-4xl bg-[#080808] border border-white/10 rounded-sm relative overflow-hidden"
+                >
+                    <!-- Close Button -->
+                    <button
+                        onclick={() => (selectedBlogPost = null)}
+                        class="absolute top-6 right-6 w-10 h-10 border border-white/10 rounded-full flex items-center justify-center hover:bg-white hover:text-black transition-all duration-500 cursor-pointer z-50 text-white"
+                    >
+                        <X class="w-4 h-4" />
+                    </button>
+
+                    <!-- Large Header Image -->
+                    <div
+                        class="relative w-full h-[350px] overflow-hidden bg-black"
+                    >
+                        <img
+                            src={selectedBlogPost.image}
+                            alt={selectedBlogPost.title}
+                            class="w-full h-full object-cover opacity-50"
+                        />
+                        <div
+                            class="absolute inset-0 bg-gradient-to-t from-[#080808] via-transparent to-transparent"
+                        ></div>
+                        <div
+                            class="absolute bottom-10 left-10 right-10 space-y-4 font-mono"
+                        >
+                            <span
+                                class="bg-brand-red px-3 py-1 text-[9px] uppercase tracking-widest text-white"
+                            >
+                                {selectedBlogPost.tag}
+                            </span>
+                            <h2
+                                class="text-4xl lg:text-5xl font-display font-light uppercase tracking-tight text-white"
+                            >
+                                {selectedBlogPost.title}
+                            </h2>
+                        </div>
+                    </div>
+
+                    <!-- Content Area -->
+                    <div
+                        class="p-10 md:p-16 space-y-8 max-h-[50vh] overflow-y-auto font-light leading-relaxed text-white/70 text-sm"
+                    >
+                        <div
+                            class="flex items-center gap-6 text-[10px] font-mono text-white/40 border-b border-white/5 pb-4"
+                        >
+                            <span>Опубликовано: {selectedBlogPost.date}</span>
+                            <span>•</span>
+                            <span
+                                >Время чтения: {selectedBlogPost.readTime}</span
+                            >
+                        </div>
+
+                        <p class="text-base italic text-white/90">
+                            {selectedBlogPost.subtitle}
+                        </p>
+
+                        <p
+                            class="whitespace-pre-line text-justify leading-loose"
+                        >
+                            {selectedBlogPost.content}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        {/if}
     {/if}
 
     <!-- Admin Panel View -->
