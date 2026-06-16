@@ -105,3 +105,7 @@ CREATE TABLE IF NOT EXISTS admin_audit_log (
 -- Migrate old role names to new ones
 UPDATE users SET role = 'super_admin' WHERE role = 'chief_admin';
 UPDATE users SET role = 'admin' WHERE role = 'establishment_admin';
+
+-- GDPR / personal data consent
+ALTER TABLE users ADD COLUMN IF NOT EXISTS consent_given BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS consent_given_at TIMESTAMPTZ;

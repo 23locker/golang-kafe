@@ -3,10 +3,11 @@ package dto
 import "time"
 
 type RegisterRequest struct {
-	Name     string `json:"name"`
-	Phone    string `json:"phone"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Name         string `json:"name"`
+	Phone        string `json:"phone"`
+	Email        string `json:"email"`
+	Password     string `json:"password"`
+	ConsentGiven bool   `json:"consent_given"`
 }
 
 type LoginRequest struct {

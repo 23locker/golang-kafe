@@ -191,6 +191,7 @@
     let authPhone = $state("");
     let authEmail = $state("");
     let authPassword = $state("");
+    let authConsentGiven = $state(false);
     let authError = $state("");
 
     // Profile and History Drawer
@@ -1037,6 +1038,7 @@
                           phone: authPhone,
                           email: authEmail,
                           password: authPassword,
+                          consent_given: authConsentGiven,
                       };
 
             const res = await fetch(url, {
@@ -1052,6 +1054,7 @@
                 authPhone = "";
                 authEmail = "";
                 authPassword = "";
+                authConsentGiven = false;
                 if (currentUser) {
                     fetchUserHistory();
                 }
@@ -1500,9 +1503,46 @@
                     />
                 </div>
 
+                {#if authMode === "register"}
+                    <div
+                        class="border border-white/10 bg-white/[0.02] p-4 rounded-sm space-y-3"
+                    >
+                        <label
+                            class="flex items-start gap-3 cursor-pointer group"
+                        >
+                            <input
+                                type="checkbox"
+                                bind:checked={authConsentGiven}
+                                class="mt-0.5 w-4 h-4 shrink-0 accent-brand-red cursor-pointer"
+                            />
+                            <span
+                                class="text-[10px] text-white/50 leading-relaxed group-hover:text-white/70 transition-colors"
+                            >
+                                Я даю согласие на обработку моих персональных
+                                данных в рамках данного дипломного проекта в
+                                демонстрационных целях для тестирования системы.
+                                <a
+                                    href="#privacy"
+                                    onclick={(e) => e.preventDefault()}
+                                    class="text-brand-red/70 hover:text-brand-red underline underline-offset-2 ml-1"
+                                    >Политика конфиденциальности (демо)</a
+                                >
+                            </span>
+                        </label>
+                        <p class="text-[9px] text-white/20 font-mono pl-7">
+                            Ваши данные используются исключительно для
+                            тестирования и не передаются третьим лицам.
+                        </p>
+                    </div>
+                {/if}
+
                 <button
                     onclick={handleAuth}
-                    class="w-full bg-white text-black py-4 font-bold uppercase tracking-widest text-xs hover:bg-brand-red hover:text-white transition-all cursor-pointer"
+                    disabled={authMode === "register" && !authConsentGiven}
+                    class="w-full py-4 font-bold uppercase tracking-widest text-xs transition-all
+                        {authMode === 'register' && !authConsentGiven
+                        ? 'bg-white/10 text-white/20 cursor-not-allowed'
+                        : 'bg-white text-black hover:bg-brand-red hover:text-white cursor-pointer'}"
                 >
                     {#if authMode === "login"}Войти{:else}Создать аккаунт{/if}
                 </button>
@@ -1514,6 +1554,7 @@
                                 authMode === "login" ? "register" : "login";
                             authError = "";
                             authEmail = "";
+                            authConsentGiven = false;
                         }}
                         class="text-[10px] uppercase tracking-widest text-white/40 hover:text-white transition-colors"
                     >

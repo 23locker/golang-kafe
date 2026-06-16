@@ -85,9 +85,12 @@ func (r *PostgresUserRepository) Create(ctx context.Context, u *models.User) err
 	if u.Role == "" {
 		u.Role = "user"
 	}
-	query := `INSERT INTO users (name, phone, email, password_hash, default_address, role)
-	          VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, created_at`
-	err := r.db.QueryRowContext(ctx, query, u.Name, u.Phone, u.Email, u.PasswordHash, u.DefaultAddress, u.Role).Scan(&u.ID, &u.CreatedAt)
+	query := `INSERT INTO users (name, phone, email, password_hash, default_address, role, consent_given, consent_given_at)
+	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, created_at`
+	err := r.db.QueryRowContext(ctx, query,
+		u.Name, u.Phone, u.Email, u.PasswordHash, u.DefaultAddress, u.Role,
+		u.ConsentGiven, u.ConsentGivenAt,
+	).Scan(&u.ID, &u.CreatedAt)
 	if err != nil {
 		return fmt.Errorf("ошибка создания пользователя: %w", err)
 	}
@@ -95,9 +98,9 @@ func (r *PostgresUserRepository) Create(ctx context.Context, u *models.User) err
 }
 
 func (r *PostgresUserRepository) GetByID(ctx context.Context, id int) (*models.User, error) {
-	query := `SELECT id, name, phone, email, password_hash, default_address, role, created_at FROM users WHERE id = $1`
+	query := `SELECT id, name, phone, email, password_hash, default_address, role, consent_given, consent_given_at, created_at FROM users WHERE id = $1`
 	var u models.User
-	err := r.db.QueryRowContext(ctx, query, id).Scan(&u.ID, &u.Name, &u.Phone, &u.Email, &u.PasswordHash, &u.DefaultAddress, &u.Role, &u.CreatedAt)
+	err := r.db.QueryRowContext(ctx, query, id).Scan(&u.ID, &u.Name, &u.Phone, &u.Email, &u.PasswordHash, &u.DefaultAddress, &u.Role, &u.ConsentGiven, &u.ConsentGivenAt, &u.CreatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("пользователь не найден")
@@ -108,9 +111,9 @@ func (r *PostgresUserRepository) GetByID(ctx context.Context, id int) (*models.U
 }
 
 func (r *PostgresUserRepository) GetByPhone(ctx context.Context, phone string) (*models.User, error) {
-	query := `SELECT id, name, phone, email, password_hash, default_address, role, created_at FROM users WHERE phone = $1`
+	query := `SELECT id, name, phone, email, password_hash, default_address, role, consent_given, consent_given_at, created_at FROM users WHERE phone = $1`
 	var u models.User
-	err := r.db.QueryRowContext(ctx, query, phone).Scan(&u.ID, &u.Name, &u.Phone, &u.Email, &u.PasswordHash, &u.DefaultAddress, &u.Role, &u.CreatedAt)
+	err := r.db.QueryRowContext(ctx, query, phone).Scan(&u.ID, &u.Name, &u.Phone, &u.Email, &u.PasswordHash, &u.DefaultAddress, &u.Role, &u.ConsentGiven, &u.ConsentGivenAt, &u.CreatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("пользователь не найден")
@@ -139,7 +142,7 @@ func (r *PostgresUserRepository) UpdateEmail(ctx context.Context, userID int, em
 }
 
 func (r *PostgresUserRepository) GetAll(ctx context.Context) ([]models.User, error) {
-	query := `SELECT id, name, phone, email, password_hash, default_address, role, created_at FROM users ORDER BY created_at DESC`
+	query := `SELECT id, name, phone, email, password_hash, default_address, role, consent_given, consent_given_at, created_at FROM users ORDER BY created_at DESC`
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("ошибка получения пользователей: %w", err)
@@ -149,7 +152,7 @@ func (r *PostgresUserRepository) GetAll(ctx context.Context) ([]models.User, err
 	var list []models.User
 	for rows.Next() {
 		var u models.User
-		if err := rows.Scan(&u.ID, &u.Name, &u.Phone, &u.Email, &u.PasswordHash, &u.DefaultAddress, &u.Role, &u.CreatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.Name, &u.Phone, &u.Email, &u.PasswordHash, &u.DefaultAddress, &u.Role, &u.ConsentGiven, &u.ConsentGivenAt, &u.CreatedAt); err != nil {
 			return nil, fmt.Errorf("ошибка сканирования пользователя: %w", err)
 		}
 		list = append(list, u)

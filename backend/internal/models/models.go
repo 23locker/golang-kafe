@@ -10,6 +10,8 @@ type User struct {
 	PasswordHash   string
 	DefaultAddress *string
 	Role           string
+	ConsentGiven   bool
+	ConsentGivenAt *time.Time
 	CreatedAt      time.Time
 }
 

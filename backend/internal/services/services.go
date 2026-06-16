@@ -115,6 +115,9 @@ func (s *AuthServiceImpl) Register(ctx context.Context, req dto.RegisterRequest)
 	if len(req.Password) < 6 {
 		return nil, fmt.Errorf("пароль должен содержать не менее 6 символов")
 	}
+	if !req.ConsentGiven {
+		return nil, fmt.Errorf("для регистрации необходимо дать согласие на обработку персональных данных")
+	}
 	if _, err := s.userRepo.GetByPhone(ctx, req.Phone); err == nil {
 		return nil, fmt.Errorf("пользователь с таким номером телефона уже существует")
 	}
@@ -124,10 +127,13 @@ func (s *AuthServiceImpl) Register(ctx context.Context, req dto.RegisterRequest)
 		return nil, fmt.Errorf("ошибка хэширования пароля: %w", err)
 	}
 
+	now := time.Now()
 	u := &models.User{
-		Name:         req.Name,
-		Phone:        req.Phone,
-		PasswordHash: string(hashedPassword),
+		Name:           req.Name,
+		Phone:          req.Phone,
+		PasswordHash:   string(hashedPassword),
+		ConsentGiven:   true,
+		ConsentGivenAt: &now,
 	}
 	if req.Email != "" {
 		u.Email = &req.Email

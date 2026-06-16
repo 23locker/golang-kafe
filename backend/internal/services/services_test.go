@@ -391,7 +391,7 @@ func TestAuthService_RegisterAndLogin(t *testing.T) {
 	authService := NewAuthService(userRepo, "my-secret-key")
 	ctx := context.Background()
 
-	regReq := dto.RegisterRequest{Name: "Test User", Phone: "+79998887766", Password: "password123"}
+	regReq := dto.RegisterRequest{Name: "Test User", Phone: "+79998887766", Password: "password123", ConsentGiven: true}
 
 	userResp, err := authService.Register(ctx, regReq)
 	if err != nil {
