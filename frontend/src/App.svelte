@@ -21,6 +21,7 @@
         Trash2,
         PlusCircle,
         Search,
+        ChevronUp,
     } from "@lucide/svelte";
     import Instagram from "./lib/icons/Instagram.svelte";
     import Facebook from "./lib/icons/Facebook.svelte";
@@ -277,6 +278,11 @@
     let prodFormWeight = $state(0);
     let prodFormCalories = $state(0);
     let prodFormIsAvailable = $state(true);
+
+    // Menu category navigation / scroll spy
+    let activeCategorySlug = $state<string | null>(null);
+    let showScrollTop = $state(false);
+    let _menuObserver: IntersectionObserver | null = null;
 
     // Menu admin filtering / multi-select
     let menuSearchQuery = $state("");
@@ -655,11 +661,62 @@
             : adminUsers,
     );
 
-    onMount(async () => {
+    // NAV_HEIGHT = fixed top nav (~73px) + sticky cat nav (~49px) + 16px gap
+    const SCROLL_OFFSET = 145;
+
+    function scrollToCategory(slug: string) {
+        const el = document.getElementById(`cat-${slug}`);
+        if (!el) return;
+        const top =
+            el.getBoundingClientRect().top + window.scrollY - SCROLL_OFFSET;
+        window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+        activeCategorySlug = slug;
+    }
+
+    function setupMenuObserver() {
+        _menuObserver?.disconnect();
+        _menuObserver = null;
+        const sections = categories
+            .filter((cat) => dishes.some((d) => d.category === cat.slug))
+            .map((cat) => document.getElementById(`cat-${cat.slug}`))
+            .filter(Boolean) as HTMLElement[];
+        if (sections.length === 0) return;
+        _menuObserver = new IntersectionObserver(
+            (entries) => {
+                const hit = entries
+                    .filter((e) => e.isIntersecting)
+                    .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+                if (hit) {
+                    activeCategorySlug = hit.target.id.replace("cat-", "");
+                }
+            },
+            { rootMargin: "-120px 0px -50% 0px", threshold: 0 },
+        );
+        sections.forEach((el) => _menuObserver!.observe(el));
+    }
+
+    function handleWindowScroll() {
+        showScrollTop = window.scrollY > 500;
+    }
+
+    $effect(() => {
+        const view = currentView;
+        const cats = categories;
+        if (view !== "menu" || cats.length === 0) {
+            _menuObserver?.disconnect();
+            _menuObserver = null;
+            activeCategorySlug = null;
+            return;
+        }
+        const timer = setTimeout(setupMenuObserver, 150);
+        return () => clearTimeout(timer);
+    });
+
+    onMount(() => {
         isMounted = true;
         fetchMenu();
         fetchBlogPosts();
-        await fetchProfile();
+        fetchProfile();
 
         // Set reservation date boundaries (today to today + 1 month)
         const todayObj = new Date();
@@ -695,7 +752,14 @@
             }
         };
         window.addEventListener("hashchange", handleHash);
+        window.addEventListener("scroll", handleWindowScroll, { passive: true });
         handleHash();
+
+        return () => {
+            window.removeEventListener("hashchange", handleHash);
+            window.removeEventListener("scroll", handleWindowScroll);
+            _menuObserver?.disconnect();
+        };
     });
 
     // Reactive Derived Values
@@ -2275,50 +2339,55 @@
                 </div>
             </section>
 
+            <!-- Sticky Category Navigation -->
+            {#if categories.some((c) => dishes.some((d) => d.category === c.slug))}
+                <div
+                    class="sticky top-[73px] z-30 bg-[#030303]/95 backdrop-blur-sm border-b border-white/5"
+                >
+                    <div class="px-4 md:px-12 lg:px-20">
+                        <div
+                            class="flex overflow-x-auto gap-1 py-3"
+                            style="scrollbar-width:none;-ms-overflow-style:none"
+                        >
+                            {#each categories as cat}
+                                {@const hasItems = dishes.some(
+                                    (d) => d.category === cat.slug,
+                                )}
+                                {#if hasItems}
+                                    <button
+                                        onclick={() =>
+                                            scrollToCategory(cat.slug)}
+                                        class="shrink-0 whitespace-nowrap px-4 py-2 text-[10px] font-mono uppercase tracking-widest rounded-sm transition-all cursor-pointer {activeCategorySlug ===
+                                        cat.slug
+                                            ? 'bg-white text-black'
+                                            : 'text-white/40 hover:text-white hover:bg-white/5'}"
+                                    >
+                                        {cat.name}
+                                    </button>
+                                {/if}
+                            {/each}
+                        </div>
+                    </div>
+                </div>
+            {/if}
+
             <!-- Catalog Section -->
             <section
                 id="menu"
-                class="py-40 px-6 md:px-12 lg:px-20 relative bg-[#030303]"
+                class="py-20 md:py-32 px-6 md:px-12 lg:px-20 relative bg-[#030303]"
             >
-                <div class="w-full space-y-32">
-                    <div
-                        class="grid grid-cols-1 md:grid-cols-2 gap-20 items-end"
-                    >
-                        <div class="space-y-6">
-                            <h2
-                                class="text-[10rem] font-display font-black uppercase tracking-tighter text-white/5 absolute -top-20 left-0 pointer-events-none overflow-hidden select-none"
-                            >
-                                МЕНЮ
-                            </h2>
-                            <h2
-                                class="text-6xl font-display font-extralight uppercase tracking-tight relative z-10"
-                            >
-                                Кулинарные <span
-                                    class="font-serif italic text-white/20"
-                                    >Протоколы</span
-                                >
-                            </h2>
-                            <p
-                                class="max-w-md text-white/40 text-sm leading-relaxed font-light"
-                            >
-                                Наше меню основывается на традиционных вкусах
-                                степной Азии. Каждое блюдо — это баланс специй и
-                                свежего мяса.
-                            </p>
-                        </div>
-                    </div>
-
-                    <div class="space-y-40">
-                        {#if categories.length === 0}
-                            <p class="text-white/40 text-center font-mono">
-                                Загрузка меню...
-                            </p>
-                        {:else}
-                            {#each categories as cat}
-                                {@const catDishes = dishes.filter(
-                                    (d) => d.category === cat.slug,
-                                )}
-                                {#if catDishes.length > 0}
+                <div class="w-full space-y-20 md:space-y-32">
+                    {#if categories.length === 0}
+                        <p class="text-white/40 text-center font-mono py-20">
+                            Загрузка меню...
+                        </p>
+                    {:else}
+                        {#each categories as cat}
+                            {@const catDishes = dishes.filter(
+                                (d) => d.category === cat.slug,
+                            )}
+                            {#if catDishes.length > 0}
+                                <div id="cat-{cat.slug}">
                                     <MenuCategory
                                         title={cat.name}
                                         subtitle={`${cat.name} Section`}
@@ -2328,12 +2397,17 @@
                                         getQty={getQuantity}
                                         onAdd={addToCart}
                                         onRemove={removeFromCart}
-                                        onCardClick={(id) => openDishModal(dishes.find((d) => d.id === id)!)}
+                                        onCardClick={(id) =>
+                                            openDishModal(
+                                                dishes.find(
+                                                    (d) => d.id === id,
+                                                )!,
+                                            )}
                                     />
-                                {/if}
-                            {/each}
-                        {/if}
-                    </div>
+                                </div>
+                            {/if}
+                        {/each}
+                    {/if}
                 </div>
             </section>
         {:else if currentView === "blog"}
@@ -5004,6 +5078,18 @@
                 </div>
             </div>
         </div>
+    {/if}
+
+    <!-- Scroll to top button -->
+    {#if showScrollTop}
+        <button
+            transition:fade={{ duration: 200 }}
+            onclick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            class="fixed bottom-8 right-8 z-50 w-11 h-11 bg-white text-black flex items-center justify-center shadow-2xl hover:bg-brand-red hover:text-white transition-all duration-300 cursor-pointer rounded-sm"
+            aria-label="Наверх"
+        >
+            <ChevronUp class="w-5 h-5" />
+        </button>
     {/if}
 
     <!-- Confirm: delete order -->
