@@ -5,6 +5,7 @@ export interface Dish {
   price: number;
   image: string;
   category: 'main' | 'vegetables' | 'alcohol' | 'drinks';
+  categoryName?: string;
 }
 
 export const MAIN_DISHES: Dish[] = [

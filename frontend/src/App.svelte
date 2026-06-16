@@ -257,6 +257,8 @@
     let auditLog = $state<AuditLogEntry[]>([]);
     let orderSearchPhone = $state("");
     let orderSearchId = $state("");
+    let sseConnected = $state(false);
+    let sseSource = $state<EventSource | null>(null);
 
     // Admin Product Form states
     let isProdFormOpen = $state(false);
@@ -289,16 +291,18 @@
                 productsList = await prodRes.json();
                 dishes = productsList
                     .filter((p) => p.is_available)
-                    .map((p) => ({
-                        id: String(p.id),
-                        name: p.name,
-                        description: p.description,
-                        price: p.price,
-                        image: p.image_url || "/images/placeholder.jpg",
-                        category: (categories.find(
-                            (c) => c.id === p.category_id,
-                        )?.slug || "main") as any,
-                    }));
+                    .map((p) => {
+                        const cat = categories.find((c) => c.id === p.category_id);
+                        return {
+                            id: String(p.id),
+                            name: p.name,
+                            description: p.description,
+                            price: p.price,
+                            image: p.image_url || "/images/placeholder.jpg",
+                            category: (cat?.slug || "main") as any,
+                            categoryName: cat?.name,
+                        };
+                    });
             }
         } catch (e) {
             console.error("Failed to load menu data:", e);
@@ -405,13 +409,23 @@
         }
     }
 
-    // Load current user profile
+    // Load current user profile.
+    // Reads sessionStorage immediately (no latency), then verifies with the server.
     async function fetchProfile() {
+        // Restore from cache first so the navbar renders instantly
+        const cached = sessionStorage.getItem("currentUser");
+        if (cached && !currentUser) {
+            try {
+                currentUser = JSON.parse(cached);
+            } catch {}
+        }
+
         try {
             const res = await fetch("/api/auth/profile");
             if (res.ok) {
                 currentUser = await res.json();
                 if (currentUser) {
+                    sessionStorage.setItem("currentUser", JSON.stringify(currentUser));
                     checkoutName = currentUser.name;
                     checkoutPhone = currentUser.phone;
                     checkoutAddress = currentUser.default_address || "";
@@ -420,9 +434,10 @@
                 }
             } else {
                 currentUser = null;
+                sessionStorage.removeItem("currentUser");
             }
         } catch (e) {
-            currentUser = null;
+            // Keep cached value on network error so UI doesn't flicker
         }
     }
 
@@ -549,6 +564,32 @@
         }
     }
 
+    function connectOrdersSSE() {
+        if (sseSource) {
+            sseSource.close();
+            sseSource = null;
+        }
+        const es = new EventSource("/api/admin/orders/sse");
+        es.onopen = () => { sseConnected = true; };
+        es.onmessage = (event: MessageEvent) => {
+            if (event.data === "connected") { sseConnected = true; return; }
+            fetchAdminOrders();
+        };
+        es.onerror = () => {
+            sseConnected = false;
+            es.close();
+            sseSource = null;
+            setTimeout(() => { if (currentView === "admin") connectOrdersSSE(); }, 5000);
+        };
+        sseSource = es;
+    }
+
+    function disconnectOrdersSSE() {
+        sseSource?.close();
+        sseSource = null;
+        sseConnected = false;
+    }
+
     let filteredAdminUsers = $derived(
         userSearchPhone.trim()
             ? adminUsers.filter((u) => u.phone.includes(userSearchPhone.trim()))
@@ -575,24 +616,23 @@
                 if (!isAdminRole(currentUser)) {
                     window.location.hash = "";
                     currentView = "home";
+                    disconnectOrdersSSE();
                     return;
                 }
                 currentView = "admin";
                 fetchAdminData();
-            } else if (window.location.hash === "#menu") {
-                currentView = "menu";
-            } else if (window.location.hash === "#blog") {
-                currentView = "blog";
-            } else if (window.location.hash === "#about") {
-                currentView = "about";
-            } else if (
-                window.location.hash === "#reviews" ||
-                window.location.hash === "#tour" ||
-                window.location.hash === "#contacts"
-            ) {
-                currentView = "home";
+                connectOrdersSSE();
             } else {
-                currentView = "home";
+                if (currentView === "admin") disconnectOrdersSSE();
+                if (window.location.hash === "#menu") {
+                    currentView = "menu";
+                } else if (window.location.hash === "#blog") {
+                    currentView = "blog";
+                } else if (window.location.hash === "#about") {
+                    currentView = "about";
+                } else {
+                    currentView = "home";
+                }
             }
         };
         window.addEventListener("hashchange", handleHash);
@@ -889,9 +929,11 @@
             const res = await fetch("/api/auth/logout", { method: "POST" });
             if (res.ok) {
                 currentUser = null;
+                sessionStorage.removeItem("currentUser");
                 userOrders = [];
                 userReservations = [];
                 isProfileOpen = false;
+                disconnectOrdersSSE();
                 if (currentView === "admin") {
                     currentView = "home";
                     window.location.hash = "";
@@ -3146,14 +3188,19 @@
 
                 {#if adminTab === "orders"}
                     <div class="space-y-8">
-                        <h2
-                            class="text-3xl font-display font-light uppercase tracking-tight text-white"
-                        >
-                            Список <span
-                                class="font-serif italic text-white/40 lowercase"
-                                >заказов</span
-                            >
-                        </h2>
+                        <div class="flex items-center gap-4">
+                            <h2 class="text-3xl font-display font-light uppercase tracking-tight text-white">
+                                Список <span class="font-serif italic text-white/40 lowercase">заказов</span>
+                            </h2>
+                            {#if sseConnected}
+                                <span class="flex items-center gap-1.5 text-[9px] font-mono uppercase tracking-widest text-emerald-400 border border-emerald-400/20 bg-emerald-400/10 px-2 py-0.5">
+                                    <span class="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span>
+                                    Live
+                                </span>
+                            {:else}
+                                <span class="text-[9px] font-mono uppercase tracking-widest text-white/20 border border-white/5 px-2 py-0.5">Offline</span>
+                            {/if}
+                        </div>
 
                         <!-- Server-side search by phone / order ID -->
                         <div

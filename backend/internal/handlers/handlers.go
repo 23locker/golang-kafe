@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"backend/internal/dto"
@@ -19,6 +20,42 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/golang-jwt/jwt/v5"
 )
+
+// OrdersHub broadcasts order events to subscribed admin SSE clients.
+type OrdersHub struct {
+	mu      sync.RWMutex
+	clients map[chan string]struct{}
+}
+
+func newOrdersHub() *OrdersHub {
+	return &OrdersHub{clients: make(map[chan string]struct{})}
+}
+
+func (h *OrdersHub) subscribe() chan string {
+	ch := make(chan string, 8)
+	h.mu.Lock()
+	h.clients[ch] = struct{}{}
+	h.mu.Unlock()
+	return ch
+}
+
+func (h *OrdersHub) unsubscribe(ch chan string) {
+	h.mu.Lock()
+	delete(h.clients, ch)
+	h.mu.Unlock()
+	close(ch)
+}
+
+func (h *OrdersHub) broadcast(event string) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for ch := range h.clients {
+		select {
+		case ch <- event:
+		default:
+		}
+	}
+}
 
 type contextKey string
 
@@ -33,6 +70,7 @@ type Handler struct {
 	adminService       services.AdminService
 	blogService        services.BlogService
 	jwtSecret          string
+	ordersHub          *OrdersHub
 }
 
 func NewHandler(
@@ -52,6 +90,7 @@ func NewHandler(
 		adminService:       adminService,
 		blogService:        blogService,
 		jwtSecret:          jwtSecret,
+		ordersHub:          newOrdersHub(),
 	}
 }
 
@@ -102,6 +141,7 @@ func (h *Handler) InitRoutes() http.Handler {
 			r.Group(func(r chi.Router) {
 				r.Use(h.adminRequiredMiddleware)
 				r.Get("/orders", h.adminGetOrders)
+				r.Get("/orders/sse", h.adminOrdersSSE)
 				r.Put("/orders/{id}/status", h.adminUpdateOrderStatus)
 				r.Get("/reservations", h.adminGetReservations)
 				r.Put("/reservations/{id}/status", h.adminUpdateReservationStatus)
@@ -416,6 +456,7 @@ func (h *Handler) createOrder(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	h.ordersHub.broadcast("new_order")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(resp)
@@ -512,6 +553,7 @@ func (h *Handler) adminUpdateOrderStatus(w http.ResponseWriter, r *http.Request)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	h.ordersHub.broadcast("order_updated")
 	adminID := h.getAdminID(r)
 	_ = h.adminService.LogAudit(r.Context(), adminID, "update_order_status", "order", &id, req.Status)
 
@@ -997,4 +1039,46 @@ func (h *Handler) adminGetAuditLog(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp)
+}
+
+// adminOrdersSSE streams order events to admin clients via Server-Sent Events.
+func (h *Handler) adminOrdersSSE(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	ch := h.ordersHub.subscribe()
+	defer h.ordersHub.unsubscribe(ch)
+
+	// Confirm connection
+	fmt.Fprintf(w, "data: connected\n\n")
+	flusher.Flush()
+
+	// Keep-alive ping every 25 seconds
+	ticker := time.NewTicker(25 * time.Second)
+	defer ticker.Stop()
+
+	ctx := r.Context()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case event, ok := <-ch:
+			if !ok {
+				return
+			}
+			fmt.Fprintf(w, "data: %s\n\n", event)
+			flusher.Flush()
+		case <-ticker.C:
+			fmt.Fprintf(w, ": ping\n\n")
+			flusher.Flush()
+		}
+	}
 }
