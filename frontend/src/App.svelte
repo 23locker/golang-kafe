@@ -165,7 +165,7 @@
     }
 
     function isAdminRole(user: UserInfo | null): boolean {
-        return user?.role === "chief_admin" || user?.role === "establishment_admin";
+        return user?.role === "super_admin" || user?.role === "admin";
     }
 
     // Первые 4 доступных блюда для секции "Популярное"
@@ -429,7 +429,7 @@
             if (resRes.ok) {
                 adminReservations = await resRes.json();
             }
-            if (currentUser?.role === "chief_admin") {
+            if (isAdminRole(currentUser)) {
                 let statsUrl = "/api/admin/stats";
                 if (statsStartDate && statsEndDate) {
                     statsUrl += `?start_date=${statsStartDate}&end_date=${statsEndDate}`;
@@ -467,13 +467,6 @@
                     return;
                 }
                 currentView = "admin";
-                if (
-                    currentUser &&
-                    currentUser.role !== "chief_admin" &&
-                    adminTab === "stats"
-                ) {
-                    adminTab = "orders";
-                }
                 fetchAdminData();
             } else if (window.location.hash === "#menu") {
                 currentView = "menu";
@@ -1722,21 +1715,12 @@
                                 >Контакты</a
                             >
                         </li>
-                        {#if currentUser?.role === "chief_admin"}
+                        {#if isAdminRole(currentUser)}
                             <li>
                                 <a
                                     href="#admin"
                                     class="text-brand-red/60 hover:text-brand-red transition-colors"
-                                    >Админ-Панель</a
-                                >
-                            </li>
-                        {/if}
-                        {#if currentUser?.role === "establishment_admin"}
-                            <li>
-                                <a
-                                    href="#admin"
-                                    class="text-brand-red/60 hover:text-brand-red transition-colors"
-                                    >Управление заведением</a
+                                    >{currentUser?.role === "super_admin" ? "Админ-Панель" : "Управление"}</a
                                 >
                             </li>
                         {/if}
@@ -2822,7 +2806,7 @@
         >
             <!-- Admin Navigation Sidebar -->
             <aside class="w-full lg:w-64 space-y-2 flex-shrink-0">
-                {#if currentUser?.role === "chief_admin"}
+                {#if isAdminRole(currentUser)}
                     <button
                         onclick={() => (adminTab = "stats")}
                         class="w-full text-left px-6 py-4 text-[11px] font-mono uppercase tracking-widest border transition-all cursor-pointer flex items-center gap-4 {adminTab ===
@@ -2857,7 +2841,7 @@
                     <span>Бронирования ({adminReservations.length})</span>
                 </button>
 
-                {#if currentUser?.role === "chief_admin"}
+                {#if isAdminRole(currentUser)}
                     <button
                         onclick={() => (adminTab = "menu")}
                         class="w-full text-left px-6 py-4 text-[11px] font-mono uppercase tracking-widest border transition-all cursor-pointer flex items-center gap-4 {adminTab ===
