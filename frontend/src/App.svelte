@@ -20,6 +20,7 @@
         Layers,
         Trash2,
         PlusCircle,
+        Search,
     } from "@lucide/svelte";
     import Instagram from "./lib/icons/Instagram.svelte";
     import Facebook from "./lib/icons/Facebook.svelte";
@@ -274,6 +275,12 @@
     let prodFormWeight = $state(0);
     let prodFormCalories = $state(0);
     let prodFormIsAvailable = $state(true);
+
+    // Menu admin filtering / multi-select
+    let menuSearchQuery = $state("");
+    let menuFilterCategoryId = $state<number | null>(null);
+    let selectedProductIds = $state<number[]>([]);
+    let showBulkDeleteConfirm = $state(false);
 
     // Global notification
     let globalAlert = $state("");
@@ -669,6 +676,18 @@
             }
             return orderSortDirection === "desc" ? -comparison : comparison;
         });
+        return list;
+    });
+
+    let filteredProductsList = $derived.by(() => {
+        let list = productsList as typeof productsList;
+        if (menuFilterCategoryId !== null) {
+            list = list.filter((p) => p.category_id === menuFilterCategoryId);
+        }
+        const q = menuSearchQuery.trim().toLowerCase();
+        if (q) {
+            list = list.filter((p) => p.name.toLowerCase().includes(q));
+        }
         return list;
     });
 
@@ -1085,6 +1104,48 @@
             }
         } catch (e) {
             alert("Ошибка соединения");
+        }
+    }
+
+    function toggleSelectProduct(id: number) {
+        if (selectedProductIds.includes(id)) {
+            selectedProductIds = selectedProductIds.filter((x) => x !== id);
+        } else {
+            selectedProductIds = [...selectedProductIds, id];
+        }
+    }
+
+    function toggleSelectAll() {
+        const allVisible = filteredProductsList.map((p) => p.id);
+        const allSelected =
+            allVisible.length > 0 &&
+            allVisible.every((id) => selectedProductIds.includes(id));
+        if (allSelected) {
+            selectedProductIds = selectedProductIds.filter(
+                (id) => !allVisible.includes(id),
+            );
+        } else {
+            const toAdd = allVisible.filter(
+                (id) => !selectedProductIds.includes(id),
+            );
+            selectedProductIds = [...selectedProductIds, ...toAdd];
+        }
+    }
+
+    async function confirmBulkDelete() {
+        showBulkDeleteConfirm = false;
+        const ids = [...selectedProductIds];
+        selectedProductIds = [];
+        try {
+            await Promise.all(
+                ids.map((id) =>
+                    fetch(`/api/admin/products/${id}`, { method: "DELETE" }),
+                ),
+            );
+            fetchMenu();
+            fetchAdminData();
+        } catch (e) {
+            alert("Ошибка при удалении блюд");
         }
     }
 
@@ -3831,13 +3892,166 @@
                             </div>
                         {/if}
 
+                        <!-- Bulk delete confirmation modal -->
+                        {#if showBulkDeleteConfirm}
+                            <div
+                                transition:fade
+                                class="fixed inset-0 z-[60] bg-black/80 backdrop-blur-md"
+                            ></div>
+                            <div
+                                transition:scale
+                                class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[60] w-full max-w-sm bg-[#0a0a0a] border border-white/10 p-8 shadow-2xl"
+                            >
+                                <h3
+                                    class="text-lg font-display font-light uppercase text-white mb-2"
+                                >
+                                    Подтверждение удаления
+                                </h3>
+                                <p class="text-sm text-white/50 mb-6">
+                                    Вы уверены, что хотите удалить {selectedProductIds.length}
+                                    {selectedProductIds.length === 1
+                                        ? "блюдо"
+                                        : selectedProductIds.length < 5
+                                          ? "блюда"
+                                          : "блюд"}? Это действие необратимо.
+                                </p>
+                                <div class="flex gap-3">
+                                    <button
+                                        onclick={() =>
+                                            (showBulkDeleteConfirm = false)}
+                                        class="flex-1 py-2.5 border border-white/10 hover:bg-white/5 text-white text-xs font-bold uppercase tracking-widest transition-colors cursor-pointer"
+                                    >
+                                        Отмена
+                                    </button>
+                                    <button
+                                        onclick={confirmBulkDelete}
+                                        class="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold uppercase tracking-widest transition-colors cursor-pointer"
+                                    >
+                                        Удалить
+                                    </button>
+                                </div>
+                            </div>
+                        {/if}
+
+                        <!-- Toolbar: search + category filters -->
+                        <div class="space-y-4">
+                            <div class="flex flex-wrap items-center gap-3">
+                                <div class="relative flex-1 min-w-[220px]">
+                                    <Search
+                                        class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30 pointer-events-none"
+                                    />
+                                    <input
+                                        type="text"
+                                        bind:value={menuSearchQuery}
+                                        placeholder="Поиск по названию..."
+                                        class="w-full pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-brand-red rounded-sm font-mono"
+                                    />
+                                </div>
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <button
+                                        onclick={() =>
+                                            (menuFilterCategoryId = null)}
+                                        class="px-4 py-2 text-[10px] font-mono uppercase tracking-wider border transition-all rounded-sm cursor-pointer {menuFilterCategoryId ===
+                                        null
+                                            ? 'bg-white text-black border-white'
+                                            : 'border-white/10 text-white/40 hover:border-white/30 hover:text-white/70'}"
+                                    >
+                                        Все
+                                    </button>
+                                    {#each categories as cat}
+                                        <button
+                                            onclick={() =>
+                                                (menuFilterCategoryId = cat.id)}
+                                            class="px-4 py-2 text-[10px] font-mono uppercase tracking-wider border transition-all rounded-sm cursor-pointer {menuFilterCategoryId ===
+                                            cat.id
+                                                ? 'bg-white text-black border-white'
+                                                : 'border-white/10 text-white/40 hover:border-white/30 hover:text-white/70'}"
+                                        >
+                                            {cat.name}
+                                        </button>
+                                    {/each}
+                                </div>
+                            </div>
+
+                            <!-- Selection action bar -->
+                            {#if filteredProductsList.length > 0}
+                                <div
+                                    class="flex items-center gap-4 py-2.5 border-b border-white/5"
+                                >
+                                    <label
+                                        class="flex items-center gap-2 cursor-pointer"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={filteredProductsList.length >
+                                                0 &&
+                                                filteredProductsList.every(
+                                                    (p) =>
+                                                        selectedProductIds.includes(
+                                                            p.id,
+                                                        ),
+                                                )}
+                                            onchange={toggleSelectAll}
+                                            class="w-4 h-4 accent-brand-red"
+                                        />
+                                        <span
+                                            class="text-[10px] font-mono uppercase tracking-wider text-white/40"
+                                            >Выбрать все</span
+                                        >
+                                    </label>
+                                    {#if selectedProductIds.length > 0}
+                                        <span
+                                            class="text-[10px] font-mono text-white/50"
+                                        >
+                                            Выбрано: {selectedProductIds.length}
+                                        </span>
+                                        <button
+                                            onclick={() =>
+                                                (showBulkDeleteConfirm = true)}
+                                            class="flex items-center gap-1.5 px-4 py-1.5 bg-red-600/20 border border-red-600/40 hover:bg-red-600/30 text-red-400 text-[10px] font-bold uppercase tracking-wider rounded-sm transition-all cursor-pointer"
+                                        >
+                                            <Trash2 class="w-3 h-3" />
+                                            Удалить выбранные
+                                        </button>
+                                        <button
+                                            onclick={() =>
+                                                (selectedProductIds = [])}
+                                            class="text-[10px] font-mono text-white/30 hover:text-white/60 uppercase tracking-wider cursor-pointer transition-colors"
+                                        >
+                                            Снять выделение
+                                        </button>
+                                    {/if}
+                                </div>
+                            {/if}
+                        </div>
+
                         <!-- Products List -->
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            {#each productsList as prod}
+                            {#each filteredProductsList as prod (prod.id)}
                                 <div
-                                    class="border border-white/10 bg-white/[0.01] p-6 rounded-sm space-y-4 flex flex-col justify-between"
+                                    class="border bg-white/[0.01] p-6 rounded-sm space-y-4 flex flex-col justify-between relative transition-all {selectedProductIds.includes(
+                                        prod.id,
+                                    )
+                                        ? 'border-brand-red/40 ring-1 ring-brand-red/20'
+                                        : 'border-white/10'}"
                                 >
-                                    <div class="space-y-2">
+                                    <!-- Selection checkbox -->
+                                    <label
+                                        class="absolute top-3 left-3 z-10 cursor-pointer"
+                                        onclick={(e) => e.stopPropagation()}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedProductIds.includes(
+                                                prod.id,
+                                            )}
+                                            onchange={() =>
+                                                toggleSelectProduct(prod.id)}
+                                            class="w-4 h-4 accent-brand-red"
+                                        />
+                                    </label>
+
+                                    <div class="space-y-2 pt-4">
                                         <div
                                             class="w-full aspect-video bg-[#0a0a0a] rounded-sm overflow-hidden border border-white/5"
                                         >
@@ -3848,15 +4062,31 @@
                                                 class="w-full h-full object-contain"
                                             />
                                         </div>
-                                        <h4
-                                            class="text-xs font-bold uppercase tracking-wider text-white"
+                                        <div
+                                            class="flex items-start justify-between gap-2"
                                         >
-                                            {prod.name}
-                                        </h4>
+                                            <h4
+                                                class="text-xs font-bold uppercase tracking-wider text-white"
+                                            >
+                                                {prod.name}
+                                            </h4>
+                                            <span
+                                                class="shrink-0 text-[9px] font-mono px-2 py-0.5 rounded-sm border {prod.is_available
+                                                    ? 'border-emerald-500/30 text-emerald-400'
+                                                    : 'border-white/10 text-white/30'}"
+                                            >
+                                                {prod.is_available
+                                                    ? "В наличии"
+                                                    : "Нет"}
+                                            </span>
+                                        </div>
                                         <p
                                             class="text-[10px] text-white/40 font-mono"
                                         >
-                                            Вес: {prod.weight}г | Ккал: {prod.calories}
+                                            {categories.find(
+                                                (c) =>
+                                                    c.id === prod.category_id,
+                                            )?.name ?? "—"} · {prod.weight}г · {prod.calories} ккал
                                         </p>
                                         <p
                                             class="text-xs text-white/60 line-clamp-2 leading-relaxed"
@@ -3868,8 +4098,7 @@
                                     <div
                                         class="flex items-center justify-between pt-4 border-t border-white/5 mt-4"
                                     >
-                                        <span
-                                            class="text-sm font-mono text-white"
+                                        <span class="text-sm font-mono text-white"
                                             >{prod.price} ₽</span
                                         >
                                         <div class="flex gap-2">
@@ -3882,15 +4111,19 @@
                                             </button>
                                             <button
                                                 onclick={() =>
-                                                    handleDeleteProduct(
-                                                        prod.id,
-                                                    )}
+                                                    handleDeleteProduct(prod.id)}
                                                 class="p-2 border border-white/10 hover:bg-brand-red hover:border-brand-red hover:text-white text-brand-red transition-all cursor-pointer"
                                             >
                                                 <Trash2 class="w-4 h-4" />
                                             </button>
                                         </div>
                                     </div>
+                                </div>
+                            {:else}
+                                <div
+                                    class="col-span-3 py-16 text-center text-white/20 font-mono uppercase tracking-widest text-xs"
+                                >
+                                    Блюда не найдены
                                 </div>
                             {/each}
                         </div>
