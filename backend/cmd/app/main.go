@@ -96,9 +96,3 @@ func main() {
 		log.Fatalf("ошибка запуска сервера: %v", err)
 	}
 }
-type contextKey string
-const userIDKey contextKey = "userID"
-func contextGetUserID(ctx context.Context) (int, bool) {
-	val, ok := ctx.Value(userIDKey).(int)
-	return val, ok
-}

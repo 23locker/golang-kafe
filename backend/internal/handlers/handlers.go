@@ -341,20 +341,27 @@ func (h *Handler) updateProfile(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		DefaultAddress string `json:"default_address"`
+		Email          string `json:"email"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "ошибка декодирования тела запроса", http.StatusBadRequest)
 		return
 	}
 
-	err := h.authService.UpdateAddress(r.Context(), userID, req.DefaultAddress)
-	if err != nil {
+	if err := h.authService.UpdateAddress(r.Context(), userID, req.DefaultAddress); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	if req.Email != "" {
+		if err := h.authService.UpdateEmail(r.Context(), userID, req.Email); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{"status": "адрес обновлен"})
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "профиль обновлен"})
 }
 
 func (h *Handler) getCategories(w http.ResponseWriter, r *http.Request) {

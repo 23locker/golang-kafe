@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -17,11 +18,25 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+var nonDigitRe = regexp.MustCompile(`\D`)
+
+func validatePhone(phone string) error {
+	if phone == "" {
+		return fmt.Errorf("номер телефона обязателен")
+	}
+	digits := nonDigitRe.ReplaceAllString(phone, "")
+	if len(digits) < 10 || len(digits) > 12 {
+		return fmt.Errorf("неверный формат номера телефона. Используйте формат +7XXXXXXXXXX")
+	}
+	return nil
+}
+
 type AuthService interface {
 	Register(ctx context.Context, req dto.RegisterRequest) (*dto.UserResponse, error)
 	Login(ctx context.Context, req dto.LoginRequest) (string, error)
 	GetUserByID(ctx context.Context, id int) (*dto.UserResponse, error)
 	UpdateAddress(ctx context.Context, userID int, address string) error
+	UpdateEmail(ctx context.Context, userID int, email string) error
 }
 
 type ProductService interface {
@@ -68,7 +83,15 @@ func NewAuthService(userRepo repositories.UserRepository, jwtSecret string) *Aut
 
 func (s *AuthServiceImpl) Register(ctx context.Context, req dto.RegisterRequest) (*dto.UserResponse, error) {
 	if req.Name == "" || req.Phone == "" || req.Password == "" {
-		return nil, fmt.Errorf("все поля обязательны для заполнения")
+		return nil, fmt.Errorf("имя, телефон и пароль обязательны для заполнения")
+	}
+
+	if err := validatePhone(req.Phone); err != nil {
+		return nil, err
+	}
+
+	if len(req.Password) < 6 {
+		return nil, fmt.Errorf("пароль должен содержать не менее 6 символов")
 	}
 
 	_, err := s.userRepo.GetByPhone(ctx, req.Phone)
@@ -86,6 +109,9 @@ func (s *AuthServiceImpl) Register(ctx context.Context, req dto.RegisterRequest)
 		Phone:        req.Phone,
 		PasswordHash: string(hashedPassword),
 	}
+	if req.Email != "" {
+		u.Email = &req.Email
+	}
 
 	err = s.userRepo.Create(ctx, u)
 	if err != nil {
@@ -98,6 +124,10 @@ func (s *AuthServiceImpl) Register(ctx context.Context, req dto.RegisterRequest)
 func (s *AuthServiceImpl) Login(ctx context.Context, req dto.LoginRequest) (string, error) {
 	if req.Phone == "" || req.Password == "" {
 		return "", fmt.Errorf("телефон и пароль обязательны")
+	}
+
+	if err := validatePhone(req.Phone); err != nil {
+		return "", err
 	}
 
 	u, err := s.userRepo.GetByPhone(ctx, req.Phone)
@@ -133,10 +163,11 @@ func (s *AuthServiceImpl) GetUserByID(ctx context.Context, id int) (*dto.UserRes
 }
 
 func (s *AuthServiceImpl) UpdateAddress(ctx context.Context, userID int, address string) error {
-	if address == "" {
-		return fmt.Errorf("адрес не может быть пустым")
-	}
 	return s.userRepo.UpdateAddress(ctx, userID, address)
+}
+
+func (s *AuthServiceImpl) UpdateEmail(ctx context.Context, userID int, email string) error {
+	return s.userRepo.UpdateEmail(ctx, userID, email)
 }
 
 type ProductServiceImpl struct {
@@ -186,6 +217,10 @@ func NewOrderService(orderRepo repositories.OrderRepository, productRepo reposit
 func (s *OrderServiceImpl) CreateOrder(ctx context.Context, userID *int, req dto.CreateOrderRequest) (*dto.OrderResponse, error) {
 	if req.CustomerName == "" || req.Phone == "" || req.Address == "" || len(req.Items) == 0 {
 		return nil, fmt.Errorf("все поля заказа обязательны для заполнения")
+	}
+
+	if err := validatePhone(req.Phone); err != nil {
+		return nil, err
 	}
 
 	var orderItems []models.OrderItem
@@ -279,6 +314,10 @@ func NewReservationService(reservationRepo repositories.ReservationRepository) *
 func (s *ReservationServiceImpl) CreateReservation(ctx context.Context, userID *int, req dto.CreateReservationRequest) (*dto.ReservationResponse, error) {
 	if req.CustomerName == "" || req.Phone == "" || req.ReserveDate == "" || req.ReserveTime == "" || req.GuestsCount <= 0 {
 		return nil, fmt.Errorf("все поля бронирования обязательны")
+	}
+
+	if err := validatePhone(req.Phone); err != nil {
+		return nil, err
 	}
 
 	parsedDate, err := time.Parse("2006-01-02", req.ReserveDate)

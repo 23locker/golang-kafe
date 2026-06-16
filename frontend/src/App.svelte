@@ -49,6 +49,7 @@
         id: number;
         name: string;
         phone: string;
+        email: string | null;
         default_address: string | null;
         role: string;
     }
@@ -174,21 +175,19 @@
 
     let selectedBlogPost = $state<BlogPost | null>(null);
 
-    // Derived popular dishes list for home page statistcs
-    let popularDishes = $derived(
-        dishes.filter(
-            (d) =>
-                d.name.includes("Классические") ||
-                d.name.includes("бараниной") ||
-                d.name.includes("Шулэн") ||
-                d.name.includes("Облепиховый"),
-        ),
-    );
+    // Первые 4 доступных блюда для секции "Популярное"
+    let popularDishes = $derived(dishes.slice(0, 4));
+
+    function isValidPhone(phone: string): boolean {
+        const digits = phone.replace(/\D/g, "");
+        return digits.length >= 10 && digits.length <= 12;
+    }
 
     let isAuthModalOpen = $state(false);
     let authMode = $state<"login" | "register">("login");
     let authName = $state("");
     let authPhone = $state("");
+    let authEmail = $state("");
     let authPassword = $state("");
     let authError = $state("");
 
@@ -197,6 +196,7 @@
     let userOrders = $state<Order[]>([]);
     let userReservations = $state<Reservation[]>([]);
     let editAddress = $state("");
+    let editEmail = $state("");
     let profileMessage = $state("");
 
     // Cart & Order state
@@ -263,41 +263,16 @@
                 productsList = await prodRes.json();
                 dishes = productsList
                     .filter((p) => p.is_available)
-                    .map((p) => {
-                        let img = p.image_url || "/images/placeholder.jpg";
-                        // Map default database seed image paths to actual local files
-                        if (img === "/images/buuzy-classic.jpg")
-                            img = "/images/hero_buuzy_plate.png";
-                        else if (img === "/images/buuzy-lamb.jpg")
-                            img = "/images/hero_buuzy_plate.png";
-                        else if (img === "/images/shulen.jpg")
-                            img = "/images/hero_steak_plate_1779197902033.png";
-                        else if (img === "/images/buhler.jpg")
-                            img =
-                                "/images/creamy_mushrooms_plate_1779198170202.png";
-                        else if (img === "/images/asian-salad.jpg")
-                            img = "/images/fresh_salad_plate_1779198150233.png";
-                        else if (img === "/images/bird-cherry-cake.jpg")
-                            img =
-                                "/images/salmon_steak_plate_1779197942330.png";
-                        else if (img === "/images/milky-tea.jpg")
-                            img =
-                                "/images/grilled_fish_plate_1779197923227.png";
-                        else if (img === "/images/sea-buckthorn-drink.jpg")
-                            img =
-                                "/images/creamy_mushrooms_plate_1779198170202.png";
-
-                        return {
-                            id: String(p.id),
-                            name: p.name,
-                            description: p.description,
-                            price: p.price,
-                            image: img,
-                            category: (categories.find(
-                                (c) => c.id === p.category_id,
-                            )?.slug || "main") as any,
-                        };
-                    });
+                    .map((p) => ({
+                        id: String(p.id),
+                        name: p.name,
+                        description: p.description,
+                        price: p.price,
+                        image: p.image_url || "/images/placeholder.jpg",
+                        category: (categories.find(
+                            (c) => c.id === p.category_id,
+                        )?.slug || "main") as any,
+                    }));
             }
         } catch (e) {
             console.error("Failed to load menu data:", e);
@@ -310,12 +285,12 @@
             const res = await fetch("/api/auth/profile");
             if (res.ok) {
                 currentUser = await res.json();
-                // Prefill checkout details
                 if (currentUser) {
                     checkoutName = currentUser.name;
                     checkoutPhone = currentUser.phone;
                     checkoutAddress = currentUser.default_address || "";
                     editAddress = currentUser.default_address || "";
+                    editEmail = currentUser.email || "";
                 }
             } else {
                 currentUser = null;
@@ -324,6 +299,14 @@
             currentUser = null;
         }
     }
+
+    // Автоматически подставляем данные пользователя в форму бронирования
+    $effect(() => {
+        if (currentUser) {
+            if (!reserveName) reserveName = currentUser.name;
+            if (!reservePhone) reservePhone = currentUser.phone;
+        }
+    });
 
     // Fetch orders and reservations for the current user
     async function fetchUserHistory() {
@@ -477,6 +460,10 @@
             alert("Пожалуйста, заполните все обязательные поля");
             return;
         }
+        if (!isValidPhone(checkoutPhone)) {
+            alert("Неверный формат номера телефона. Используйте формат +7XXXXXXXXXX");
+            return;
+        }
 
         try {
             const items = cart.map((i) => ({
@@ -547,6 +534,10 @@
             alert("Пожалуйста, заполните все обязательные поля");
             return;
         }
+        if (!isValidPhone(reservePhone)) {
+            alert("Неверный формат номера телефона. Используйте формат +7XXXXXXXXXX");
+            return;
+        }
 
         // Validate booking date boundaries (no past dates, no more than 30 days ahead)
         const today = new Date();
@@ -587,8 +578,11 @@
             if (res.ok) {
                 reserveSuccessMsg =
                     "Столик успешно забронирован! Будем ждать вас в указанное время.";
-                reserveName = "";
-                reservePhone = "";
+                // Сбрасываем только поля даты/времени, имя и телефон оставляем для удобства
+                if (!currentUser) {
+                    reserveName = "";
+                    reservePhone = "";
+                }
                 reserveDate = "";
                 reserveTime = "";
                 reserveGuests = 2;
@@ -616,6 +610,14 @@
             authError = "Введите ваше имя";
             return;
         }
+        if (!isValidPhone(authPhone)) {
+            authError = "Неверный формат номера телефона. Используйте формат +7XXXXXXXXXX";
+            return;
+        }
+        if (authMode === "register" && authPassword.length < 6) {
+            authError = "Пароль должен содержать не менее 6 символов";
+            return;
+        }
 
         try {
             const url =
@@ -626,6 +628,7 @@
                     : {
                           name: authName,
                           phone: authPhone,
+                          email: authEmail,
                           password: authPassword,
                       };
 
@@ -640,6 +643,7 @@
                 isAuthModalOpen = false;
                 authName = "";
                 authPhone = "";
+                authEmail = "";
                 authPassword = "";
                 if (currentUser) {
                     fetchUserHistory();
@@ -660,30 +664,42 @@
                 userOrders = [];
                 userReservations = [];
                 isProfileOpen = false;
+                // Сбрасываем данные форм
+                checkoutName = "";
+                checkoutPhone = "";
+                checkoutAddress = "";
+                reserveName = "";
+                reservePhone = "";
+                editAddress = "";
+                editEmail = "";
             }
         } catch (e) {
             console.error(e);
         }
     }
 
-    // Profile Address Update
+    // Profile Update (address + email)
     async function updateProfileAddress() {
         profileMessage = "";
         try {
             const res = await fetch("/api/auth/profile", {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ default_address: editAddress }),
+                body: JSON.stringify({
+                    default_address: editAddress,
+                    email: editEmail,
+                }),
             });
 
             if (res.ok) {
-                profileMessage = "Адрес по умолчанию успешно обновлен";
+                profileMessage = "Профиль успешно обновлен";
                 if (currentUser) {
                     currentUser.default_address = editAddress;
+                    currentUser.email = editEmail || null;
                     checkoutAddress = editAddress;
                 }
             } else {
-                profileMessage = "Ошибка при обновлении адреса";
+                profileMessage = "Ошибка при обновлении профиля";
             }
         } catch (e) {
             profileMessage = "Ошибка соединения с сервером";
@@ -1000,6 +1016,20 @@
                         class="w-full bg-white/5 border border-white/10 px-4 py-4 rounded-sm text-sm text-white focus:outline-none focus:border-brand-red font-light"
                     />
                 </div>
+                {#if authMode === "register"}
+                    <div class="space-y-2">
+                        <label
+                            class="text-[9px] uppercase tracking-widest text-white/40 block font-mono"
+                            >Email <span class="text-white/20">(необязательно)</span></label
+                        >
+                        <input
+                            type="email"
+                            bind:value={authEmail}
+                            placeholder="your@email.com"
+                            class="w-full bg-white/5 border border-white/10 px-4 py-4 rounded-sm text-sm text-white focus:outline-none focus:border-brand-red font-light"
+                        />
+                    </div>
+                {/if}
                 <div class="space-y-2">
                     <label
                         class="text-[9px] uppercase tracking-widest text-white/40 block font-mono"
@@ -1026,6 +1056,7 @@
                             authMode =
                                 authMode === "login" ? "register" : "login";
                             authError = "";
+                            authEmail = "";
                         }}
                         class="text-[10px] uppercase tracking-widest text-white/40 hover:text-white transition-colors"
                     >
@@ -1040,12 +1071,13 @@
     <!-- Profile & History Drawer -->
     {#if isProfileOpen}
         <div
-            transition:fade
+            transition:fade={{ duration: 200, delay: 50 }}
             onclick={() => (isProfileOpen = false)}
             class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md cursor-pointer"
         ></div>
         <div
             transition:fly={{ x: 450, duration: 400 }}
+            onclick={(e) => e.stopPropagation()}
             class="fixed inset-y-0 right-0 z-50 w-full max-w-2xl bg-[#050505] border-l border-white/5 shadow-2xl overflow-y-auto p-10 flex flex-col"
         >
             <div class="flex items-center justify-between mb-10">
@@ -1078,10 +1110,25 @@
                         <p class="text-sm font-mono text-white/40 mt-1">
                             {currentUser.phone}
                         </p>
+                        {#if currentUser.email}
+                            <p class="text-sm font-mono text-white/30 mt-1">
+                                {currentUser.email}
+                            </p>
+                        {/if}
 
                         <div
                             class="mt-6 pt-6 border-t border-white/5 space-y-4"
                         >
+                            <label
+                                class="text-[9px] uppercase tracking-widest text-white/40 block font-mono"
+                                >Email</label
+                            >
+                            <input
+                                type="email"
+                                bind:value={editEmail}
+                                placeholder="your@email.com"
+                                class="w-full bg-white/5 border border-white/10 px-4 py-3 text-xs text-white focus:outline-none focus:border-brand-red font-light"
+                            />
                             <label
                                 class="text-[9px] uppercase tracking-widest text-white/40 block font-mono"
                                 >Адрес доставки по умолчанию</label
@@ -1101,7 +1148,7 @@
                             </div>
                             {#if profileMessage}
                                 <p
-                                    class="text-[10px] font-mono text-brand-red mt-2"
+                                    class="text-[10px] font-mono {profileMessage.includes('Ошибка') ? 'text-brand-red' : 'text-emerald-400'} mt-2"
                                 >
                                     {profileMessage}
                                 </p>
@@ -1590,10 +1637,12 @@
 
                     {#if currentUser}
                         <button
-                            onclick={() => {
+                            onclick={(e) => {
+                                e.stopPropagation();
+                                if (!currentUser) return;
                                 isProfileOpen = true;
-                                editAddress =
-                                    currentUser?.default_address || "";
+                                editAddress = currentUser.default_address || "";
+                                editEmail = currentUser.email || "";
                                 fetchUserHistory();
                             }}
                             class="flex items-center gap-2 text-[10px] font-mono text-white/60 hover:text-white transition-colors cursor-pointer"
@@ -1603,7 +1652,10 @@
                         </button>
                     {:else}
                         <button
-                            onclick={() => (isAuthModalOpen = true)}
+                            onclick={(e) => {
+                                e.stopPropagation();
+                                isAuthModalOpen = true;
+                            }}
                             class="flex items-center gap-2 text-[10px] font-mono text-white/40 hover:text-white transition-colors cursor-pointer"
                         >
                             <User class="w-4 h-4 stroke-1" />

@@ -53,6 +53,10 @@ func (m *MockUserRepository) GetByPhone(ctx context.Context, phone string) (*mod
 	return u, nil
 }
 
+func (m *MockUserRepository) UpdateEmail(ctx context.Context, userID int, email string) error {
+	return nil
+}
+
 func (m *MockUserRepository) UpdateAddress(ctx context.Context, userID int, address string) error {
 	u, exists := m.UsersByID[userID]
 	if !exists {

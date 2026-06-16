@@ -5,6 +5,7 @@ import "time"
 type RegisterRequest struct {
 	Name     string `json:"name"`
 	Phone    string `json:"phone"`
+	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
@@ -17,6 +18,7 @@ type UserResponse struct {
 	ID             int     `json:"id"`
 	Name           string  `json:"name"`
 	Phone          string  `json:"phone"`
+	Email          *string `json:"email"`
 	DefaultAddress *string `json:"default_address"`
 	Role           string  `json:"role"`
 }

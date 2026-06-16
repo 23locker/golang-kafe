@@ -49,6 +49,10 @@ func (m *MockAuthService) UpdateAddress(ctx context.Context, userID int, address
 	return nil
 }
 
+func (m *MockAuthService) UpdateEmail(ctx context.Context, userID int, email string) error {
+	return nil
+}
+
 type MockProductService struct {
 	GetCategoriesFunc  func(ctx context.Context) ([]dto.CategoryResponse, error)
 	GetProductsFunc    func(ctx context.Context, categoryID *int) ([]dto.ProductResponse, error)

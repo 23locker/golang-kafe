@@ -13,6 +13,7 @@ func ToUserResponse(u *models.User) *dto.UserResponse {
 		ID:             u.ID,
 		Name:           u.Name,
 		Phone:          u.Phone,
+		Email:          u.Email,
 		DefaultAddress: u.DefaultAddress,
 		Role:           u.Role,
 	}
