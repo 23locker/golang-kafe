@@ -63,8 +63,10 @@ type AdminService interface {
 	GetOrders(ctx context.Context) ([]dto.OrderResponse, error)
 	GetOrdersFiltered(ctx context.Context, phone string, orderID *int) ([]dto.OrderResponse, error)
 	UpdateOrderStatus(ctx context.Context, orderID int, status string) error
+	DeleteOrder(ctx context.Context, id int) error
 	GetReservations(ctx context.Context) ([]dto.ReservationResponse, error)
 	UpdateReservationStatus(ctx context.Context, id int, status string) error
+	DeleteReservation(ctx context.Context, id int) error
 	// Products (admin view includes deleted)
 	GetAdminProducts(ctx context.Context, categoryID *int) ([]dto.ProductResponse, error)
 	GetAdminProductByID(ctx context.Context, id int) (dto.ProductResponse, error)
@@ -471,6 +473,10 @@ func (s *AdminServiceImpl) UpdateOrderStatus(ctx context.Context, orderID int, s
 	return s.orderRepo.UpdateStatusByID(ctx, orderID, status)
 }
 
+func (s *AdminServiceImpl) DeleteOrder(ctx context.Context, id int) error {
+	return s.orderRepo.Delete(ctx, id)
+}
+
 func (s *AdminServiceImpl) GetReservations(ctx context.Context) ([]dto.ReservationResponse, error) {
 	reservations, err := s.resRepo.GetAll(ctx)
 	if err != nil {
@@ -484,6 +490,10 @@ func (s *AdminServiceImpl) UpdateReservationStatus(ctx context.Context, id int, 
 		return fmt.Errorf("статус не может быть пустым")
 	}
 	return s.resRepo.UpdateStatusByID(ctx, id, status)
+}
+
+func (s *AdminServiceImpl) DeleteReservation(ctx context.Context, id int) error {
+	return s.resRepo.Delete(ctx, id)
 }
 
 func (s *AdminServiceImpl) GetAdminProducts(ctx context.Context, categoryID *int) ([]dto.ProductResponse, error) {

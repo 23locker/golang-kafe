@@ -141,8 +141,10 @@ type MockAdminService struct {
 	GetOrdersFunc               func(ctx context.Context) ([]dto.OrderResponse, error)
 	GetOrdersFilteredFunc       func(ctx context.Context, phone string, orderID *int) ([]dto.OrderResponse, error)
 	UpdateOrderStatusFunc       func(ctx context.Context, orderID int, status string) error
+	DeleteOrderFunc             func(ctx context.Context, id int) error
 	GetReservationsFunc         func(ctx context.Context) ([]dto.ReservationResponse, error)
 	UpdateReservationStatusFunc func(ctx context.Context, id int, status string) error
+	DeleteReservationFunc       func(ctx context.Context, id int) error
 	GetAdminProductsFunc        func(ctx context.Context, categoryID *int) ([]dto.ProductResponse, error)
 	GetAdminProductByIDFunc     func(ctx context.Context, id int) (dto.ProductResponse, error)
 	CreateProductFunc           func(ctx context.Context, req dto.ProductResponse) (dto.ProductResponse, error)
@@ -183,6 +185,13 @@ func (m *MockAdminService) UpdateOrderStatus(ctx context.Context, orderID int, s
 	return nil
 }
 
+func (m *MockAdminService) DeleteOrder(ctx context.Context, id int) error {
+	if m.DeleteOrderFunc != nil {
+		return m.DeleteOrderFunc(ctx, id)
+	}
+	return nil
+}
+
 func (m *MockAdminService) GetReservations(ctx context.Context) ([]dto.ReservationResponse, error) {
 	if m.GetReservationsFunc != nil {
 		return m.GetReservationsFunc(ctx)
@@ -193,6 +202,13 @@ func (m *MockAdminService) GetReservations(ctx context.Context) ([]dto.Reservati
 func (m *MockAdminService) UpdateReservationStatus(ctx context.Context, id int, status string) error {
 	if m.UpdateReservationStatusFunc != nil {
 		return m.UpdateReservationStatusFunc(ctx, id, status)
+	}
+	return nil
+}
+
+func (m *MockAdminService) DeleteReservation(ctx context.Context, id int) error {
+	if m.DeleteReservationFunc != nil {
+		return m.DeleteReservationFunc(ctx, id)
 	}
 	return nil
 }

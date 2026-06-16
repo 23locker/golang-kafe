@@ -196,6 +196,8 @@
     let isProfileOpen = $state(false);
     let userOrders = $state<Order[]>([]);
     let userReservations = $state<Reservation[]>([]);
+    let ordersDisplayCount = $state(3);
+    let reservationsDisplayCount = $state(3);
     let editAddress = $state("");
     let editEmail = $state("");
     let profileMessage = $state("");
@@ -281,6 +283,11 @@
     let menuFilterCategoryId = $state<number | null>(null);
     let selectedProductIds = $state<number[]>([]);
     let showBulkDeleteConfirm = $state(false);
+
+    // Admin destructive-action confirm modals
+    let deleteOrderConfirmId = $state<number | null>(null);
+    let deleteReservationConfirmId = $state<number | null>(null);
+    let deleteUserConfirmId = $state<number | null>(null);
 
     // Global notification
     let globalAlert = $state("");
@@ -463,6 +470,8 @@
     // Fetch orders and reservations for the current user
     async function fetchUserHistory() {
         if (!currentUser) return;
+        ordersDisplayCount = 3;
+        reservationsDisplayCount = 3;
         try {
             const ordRes = await fetch("/api/orders");
             if (ordRes.ok) {
@@ -558,8 +567,13 @@
     }
 
     async function handleDeleteUser(userId: number) {
-        if (!confirm("Вы уверены, что хотите удалить этого пользователя?"))
-            return;
+        deleteUserConfirmId = userId;
+    }
+
+    async function confirmDeleteUser() {
+        const userId = deleteUserConfirmId;
+        deleteUserConfirmId = null;
+        if (userId === null) return;
         try {
             const res = await fetch(`/api/admin/users/${userId}`, {
                 method: "DELETE",
@@ -569,6 +583,44 @@
             } else {
                 const err = await res.text();
                 alert("Ошибка: " + err);
+            }
+        } catch (e) {
+            alert("Ошибка соединения");
+        }
+    }
+
+    async function confirmDeleteOrder() {
+        const id = deleteOrderConfirmId;
+        deleteOrderConfirmId = null;
+        if (id === null) return;
+        try {
+            const res = await fetch(`/api/admin/orders/${id}`, {
+                method: "DELETE",
+            });
+            if (res.ok) {
+                adminOrders = adminOrders.filter((o) => o.id !== id);
+            } else {
+                const err = await res.text();
+                alert("Ошибка при удалении заказа: " + err);
+            }
+        } catch (e) {
+            alert("Ошибка соединения");
+        }
+    }
+
+    async function confirmDeleteReservation() {
+        const id = deleteReservationConfirmId;
+        deleteReservationConfirmId = null;
+        if (id === null) return;
+        try {
+            const res = await fetch(`/api/admin/reservations/${id}`, {
+                method: "DELETE",
+            });
+            if (res.ok) {
+                adminReservations = adminReservations.filter((r) => r.id !== id);
+            } else {
+                const err = await res.text();
+                alert("Ошибка при удалении бронирования: " + err);
             }
         } catch (e) {
             alert("Ошибка соединения");
@@ -1516,7 +1568,7 @@
                             </p>
                         {:else}
                             <div class="space-y-4">
-                                {#each userOrders as order}
+                                {#each userOrders.slice(0, ordersDisplayCount) as order}
                                     <div
                                         class="border border-white/5 bg-white/[0.01] p-6 rounded-sm space-y-4"
                                     >
@@ -1569,6 +1621,15 @@
                                     </div>
                                 {/each}
                             </div>
+                            {#if userOrders.length > ordersDisplayCount}
+                                <button
+                                    onclick={() => (ordersDisplayCount += 3)}
+                                    class="w-full py-3 border border-white/10 hover:border-white/30 text-[10px] font-mono uppercase tracking-widest text-white/40 hover:text-white/80 transition-all cursor-pointer"
+                                >
+                                    Показать ещё ({userOrders.length -
+                                        ordersDisplayCount} из {userOrders.length})
+                                </button>
+                            {/if}
                         {/if}
                     </div>
 
@@ -1587,7 +1648,7 @@
                             </p>
                         {:else}
                             <div class="space-y-4">
-                                {#each userReservations as res}
+                                {#each userReservations.slice(0, reservationsDisplayCount) as res}
                                     <div
                                         class="border border-white/5 bg-white/[0.01] p-6 rounded-sm flex justify-between items-start"
                                     >
@@ -1619,6 +1680,16 @@
                                     </div>
                                 {/each}
                             </div>
+                            {#if userReservations.length > reservationsDisplayCount}
+                                <button
+                                    onclick={() =>
+                                        (reservationsDisplayCount += 3)}
+                                    class="w-full py-3 border border-white/10 hover:border-white/30 text-[10px] font-mono uppercase tracking-widest text-white/40 hover:text-white/80 transition-all cursor-pointer"
+                                >
+                                    Показать ещё ({userReservations.length -
+                                        reservationsDisplayCount} из {userReservations.length})
+                                </button>
+                            {/if}
                         {/if}
                     </div>
                 </div>
@@ -3440,7 +3511,7 @@
                                                 </p>
                                             </div>
                                             <div
-                                                class="flex items-center gap-4"
+                                                class="flex items-center gap-4 flex-wrap"
                                             >
                                                 <span
                                                     class="text-[9px] uppercase tracking-widest font-mono text-white/40"
@@ -3490,6 +3561,17 @@
                                                         >Отменен (cancelled)</option
                                                     >
                                                 </select>
+                                                {#if currentUser?.role === "super_admin"}
+                                                    <button
+                                                        onclick={() =>
+                                                            (deleteOrderConfirmId =
+                                                                order.id)}
+                                                        class="p-2 border border-red-600/30 hover:bg-red-600/20 text-red-400 transition-all cursor-pointer rounded-sm"
+                                                        title="Удалить заказ"
+                                                    >
+                                                        <Trash2 class="w-4 h-4" />
+                                                    </button>
+                                                {/if}
                                             </div>
                                         </div>
 
@@ -3657,43 +3739,56 @@
                                                 <td
                                                     class="p-6 text-right font-mono"
                                                 >
-                                                    <select
-                                                        value={res.status}
-                                                        onchange={(e) =>
-                                                            updateReservationStatus(
-                                                                res.id,
-                                                                (
-                                                                    e.target as HTMLSelectElement
-                                                                ).value,
-                                                            )}
-                                                        class="bg-brand-gray border border-white/10 px-3 py-1.5 text-[10px] text-white focus:outline-none focus:border-brand-red rounded-sm"
-                                                    >
-                                                        <option
-                                                            value="new"
-                                                            class="text-black bg-white"
-                                                            >Новый</option
+                                                    <div class="flex items-center justify-end gap-2">
+                                                        <select
+                                                            value={res.status}
+                                                            onchange={(e) =>
+                                                                updateReservationStatus(
+                                                                    res.id,
+                                                                    (
+                                                                        e.target as HTMLSelectElement
+                                                                    ).value,
+                                                                )}
+                                                            class="bg-brand-gray border border-white/10 px-3 py-1.5 text-[10px] text-white focus:outline-none focus:border-brand-red rounded-sm"
                                                         >
-                                                        <option
-                                                            value="confirmed"
-                                                            class="text-black bg-white"
-                                                            >Подтвердить</option
-                                                        >
-                                                        <option
-                                                            value="called"
-                                                            class="text-black bg-white"
-                                                            >Позвонили</option
-                                                        >
-                                                        <option
-                                                            value="completed"
-                                                            class="text-black bg-white"
-                                                            >Завершен</option
-                                                        >
-                                                        <option
-                                                            value="cancelled"
-                                                            class="text-black bg-white"
-                                                            >Отменить</option
-                                                        >
-                                                    </select>
+                                                            <option
+                                                                value="new"
+                                                                class="text-black bg-white"
+                                                                >Новый</option
+                                                            >
+                                                            <option
+                                                                value="confirmed"
+                                                                class="text-black bg-white"
+                                                                >Подтвердить</option
+                                                            >
+                                                            <option
+                                                                value="called"
+                                                                class="text-black bg-white"
+                                                                >Позвонили</option
+                                                            >
+                                                            <option
+                                                                value="completed"
+                                                                class="text-black bg-white"
+                                                                >Завершен</option
+                                                            >
+                                                            <option
+                                                                value="cancelled"
+                                                                class="text-black bg-white"
+                                                                >Отменить</option
+                                                            >
+                                                        </select>
+                                                        {#if currentUser?.role === "super_admin"}
+                                                            <button
+                                                                onclick={() =>
+                                                                    (deleteReservationConfirmId =
+                                                                        res.id)}
+                                                                class="p-1.5 border border-red-600/30 hover:bg-red-600/20 text-red-400 transition-all cursor-pointer rounded-sm"
+                                                                title="Удалить бронирование"
+                                                            >
+                                                                <Trash2 class="w-3.5 h-3.5" />
+                                                            </button>
+                                                        {/if}
+                                                    </div>
                                                 </td>
                                             </tr>
                                         {/each}
@@ -4907,6 +5002,109 @@
                         {/if}
                     </div>
                 </div>
+            </div>
+        </div>
+    {/if}
+
+    <!-- Confirm: delete order -->
+    {#if deleteOrderConfirmId !== null}
+        <div
+            transition:fade
+            class="fixed inset-0 z-[80] bg-black/80 backdrop-blur-md"
+        ></div>
+        <div
+            transition:scale
+            class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[80] w-full max-w-sm bg-[#0a0a0a] border border-white/10 p-8 shadow-2xl"
+        >
+            <h3 class="text-lg font-display font-light uppercase text-white mb-2">
+                Удалить заказ #{deleteOrderConfirmId}?
+            </h3>
+            <p class="text-sm text-white/50 mb-6">
+                Заказ и все его позиции будут удалены безвозвратно.
+            </p>
+            <div class="flex gap-3">
+                <button
+                    onclick={() => (deleteOrderConfirmId = null)}
+                    class="flex-1 py-2.5 border border-white/10 hover:bg-white/5 text-white text-xs font-bold uppercase tracking-widest transition-colors cursor-pointer"
+                >
+                    Отмена
+                </button>
+                <button
+                    onclick={confirmDeleteOrder}
+                    class="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold uppercase tracking-widest transition-colors cursor-pointer"
+                >
+                    Удалить
+                </button>
+            </div>
+        </div>
+    {/if}
+
+    <!-- Confirm: delete reservation -->
+    {#if deleteReservationConfirmId !== null}
+        <div
+            transition:fade
+            class="fixed inset-0 z-[80] bg-black/80 backdrop-blur-md"
+        ></div>
+        <div
+            transition:scale
+            class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[80] w-full max-w-sm bg-[#0a0a0a] border border-white/10 p-8 shadow-2xl"
+        >
+            <h3 class="text-lg font-display font-light uppercase text-white mb-2">
+                Удалить бронирование #{deleteReservationConfirmId}?
+            </h3>
+            <p class="text-sm text-white/50 mb-6">
+                Запись о бронировании будет удалена безвозвратно.
+            </p>
+            <div class="flex gap-3">
+                <button
+                    onclick={() => (deleteReservationConfirmId = null)}
+                    class="flex-1 py-2.5 border border-white/10 hover:bg-white/5 text-white text-xs font-bold uppercase tracking-widest transition-colors cursor-pointer"
+                >
+                    Отмена
+                </button>
+                <button
+                    onclick={confirmDeleteReservation}
+                    class="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold uppercase tracking-widest transition-colors cursor-pointer"
+                >
+                    Удалить
+                </button>
+            </div>
+        </div>
+    {/if}
+
+    <!-- Confirm: delete user -->
+    {#if deleteUserConfirmId !== null}
+        {@const targetUser = adminUsers.find((u) => u.id === deleteUserConfirmId)}
+        <div
+            transition:fade
+            class="fixed inset-0 z-[80] bg-black/80 backdrop-blur-md"
+        ></div>
+        <div
+            transition:scale
+            class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[80] w-full max-w-sm bg-[#0a0a0a] border border-white/10 p-8 shadow-2xl"
+        >
+            <h3 class="text-lg font-display font-light uppercase text-white mb-2">
+                Удалить пользователя?
+            </h3>
+            <p class="text-sm text-white/50 mb-1">
+                {targetUser?.name ?? ""} ({targetUser?.phone ?? ""})
+            </p>
+            <p class="text-xs text-white/30 mb-6">
+                Аккаунт будет удалён. История заказов и бронирований пользователя сохранится в системе.
+            </p>
+            <div class="flex gap-3">
+                <button
+                    onclick={() => (deleteUserConfirmId = null)}
+                    class="flex-1 py-2.5 border border-white/10 hover:bg-white/5 text-white text-xs font-bold uppercase tracking-widest transition-colors cursor-pointer"
+                >
+                    Отмена
+                </button>
+                <button
+                    onclick={confirmDeleteUser}
+                    class="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold uppercase tracking-widest transition-colors cursor-pointer"
+                >
+                    Удалить
+                </button>
             </div>
         </div>
     {/if}

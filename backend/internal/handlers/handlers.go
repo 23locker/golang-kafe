@@ -161,11 +161,13 @@ func (h *Handler) InitRoutes() http.Handler {
 				r.Get("/users", h.adminGetUsers)
 			})
 
-			// super_admin only: role/user mutations and audit log
+			// super_admin only: role/user mutations, hard-delete history, audit log
 			r.Group(func(r chi.Router) {
 				r.Use(h.superAdminRequiredMiddleware)
 				r.Put("/users/{id}/role", h.adminUpdateUserRole)
 				r.Delete("/users/{id}", h.adminDeleteUser)
+				r.Delete("/orders/{id}", h.adminDeleteOrder)
+				r.Delete("/reservations/{id}", h.adminDeleteReservation)
 				r.Get("/audit-log", h.adminGetAuditLog)
 			})
 		})
@@ -593,6 +595,36 @@ func (h *Handler) adminUpdateReservationStatus(w http.ResponseWriter, r *http.Re
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": "статус бронирования обновлен"})
+}
+
+func (h *Handler) adminDeleteOrder(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "неверный формат идентификатора заказа", http.StatusBadRequest)
+		return
+	}
+	if err := h.adminService.DeleteOrder(r.Context(), id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	adminID := h.getAdminID(r)
+	_ = h.adminService.LogAudit(r.Context(), adminID, "delete", "order", &id, "")
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) adminDeleteReservation(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "неверный формат идентификатора бронирования", http.StatusBadRequest)
+		return
+	}
+	if err := h.adminService.DeleteReservation(r.Context(), id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	adminID := h.getAdminID(r)
+	_ = h.adminService.LogAudit(r.Context(), adminID, "delete", "reservation", &id, "")
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Handler) adminGetProducts(w http.ResponseWriter, r *http.Request) {

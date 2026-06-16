@@ -47,6 +47,7 @@ type OrderRepository interface {
 	GetAll(ctx context.Context) ([]models.Order, error)
 	GetFiltered(ctx context.Context, phone string, orderID *int) ([]models.Order, error)
 	UpdateStatusByID(ctx context.Context, orderID int, status string) error
+	Delete(ctx context.Context, id int) error
 }
 
 type BlogPostRepository interface {
@@ -62,6 +63,7 @@ type ReservationRepository interface {
 	GetByUserID(ctx context.Context, userID int) ([]models.Reservation, error)
 	GetAll(ctx context.Context) ([]models.Reservation, error)
 	UpdateStatusByID(ctx context.Context, id int, status string) error
+	Delete(ctx context.Context, id int) error
 }
 
 type AuditLogRepository interface {
@@ -500,6 +502,21 @@ func (r *PostgresOrderRepository) UpdateStatusByID(ctx context.Context, orderID 
 	return nil
 }
 
+func (r *PostgresOrderRepository) Delete(ctx context.Context, id int) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err = tx.ExecContext(ctx, `DELETE FROM order_items WHERE order_id = $1`, id); err != nil {
+		return fmt.Errorf("ошибка удаления позиций заказа: %w", err)
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM orders WHERE id = $1`, id); err != nil {
+		return fmt.Errorf("ошибка удаления заказа: %w", err)
+	}
+	return tx.Commit()
+}
+
 // PostgresBlogPostRepository
 
 type PostgresBlogPostRepository struct {
@@ -654,6 +671,14 @@ func (r *PostgresReservationRepository) UpdateStatusByID(ctx context.Context, id
 	_, err := r.db.ExecContext(ctx, query, status, id)
 	if err != nil {
 		return fmt.Errorf("ошибка обновления статуса бронирования: %w", err)
+	}
+	return nil
+}
+
+func (r *PostgresReservationRepository) Delete(ctx context.Context, id int) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM reservations WHERE id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("ошибка удаления бронирования: %w", err)
 	}
 	return nil
 }

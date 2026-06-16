@@ -306,6 +306,12 @@ func (m *MockOrderRepository) UpdateStatusByID(ctx context.Context, orderID int,
 	return nil
 }
 
+func (m *MockOrderRepository) Delete(ctx context.Context, id int) error {
+	delete(m.Orders, id)
+	delete(m.OrderItems, id)
+	return nil
+}
+
 type MockReservationRepository struct {
 	Reservations map[int]*models.Reservation
 	NextID       int
@@ -349,6 +355,11 @@ func (m *MockReservationRepository) UpdateStatusByID(ctx context.Context, id int
 		return errors.New("reservation not found")
 	}
 	r.Status = status
+	return nil
+}
+
+func (m *MockReservationRepository) Delete(ctx context.Context, id int) error {
+	delete(m.Reservations, id)
 	return nil
 }
 
