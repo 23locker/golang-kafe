@@ -13,9 +13,9 @@ import (
 // --- MOCK REPOSITORIES ---
 
 type MockUserRepository struct {
-	Users      map[string]*models.User
-	UsersByID  map[int]*models.User
-	NextID     int
+	Users     map[string]*models.User
+	UsersByID map[int]*models.User
+	NextID    int
 }
 
 func NewMockUserRepository() *MockUserRepository {
@@ -66,6 +66,43 @@ func (m *MockUserRepository) UpdateAddress(ctx context.Context, userID int, addr
 	return nil
 }
 
+func (m *MockUserRepository) GetAll(ctx context.Context) ([]models.User, error) {
+	var list []models.User
+	for _, u := range m.UsersByID {
+		list = append(list, *u)
+	}
+	return list, nil
+}
+
+func (m *MockUserRepository) UpdateRole(ctx context.Context, userID int, role string) error {
+	u, exists := m.UsersByID[userID]
+	if !exists {
+		return errors.New("user not found")
+	}
+	u.Role = role
+	return nil
+}
+
+func (m *MockUserRepository) CountByRole(ctx context.Context, role string) (int, error) {
+	count := 0
+	for _, u := range m.UsersByID {
+		if u.Role == role {
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (m *MockUserRepository) Delete(ctx context.Context, id int) error {
+	u, exists := m.UsersByID[id]
+	if !exists {
+		return errors.New("user not found")
+	}
+	delete(m.Users, u.Phone)
+	delete(m.UsersByID, id)
+	return nil
+}
+
 type MockProductRepository struct {
 	Products   map[int]*models.Product
 	Categories map[int]*models.Category
@@ -90,9 +127,12 @@ func (m *MockProductRepository) GetCategories(ctx context.Context) ([]models.Cat
 	return list, nil
 }
 
-func (m *MockProductRepository) GetProducts(ctx context.Context, categoryID *int) ([]models.Product, error) {
+func (m *MockProductRepository) GetProducts(ctx context.Context, categoryID *int, includeDeleted bool) ([]models.Product, error) {
 	var list []models.Product
 	for _, p := range m.Products {
+		if !includeDeleted && p.IsDeleted {
+			continue
+		}
 		if categoryID == nil || (p.CategoryID != nil && *p.CategoryID == *categoryID) {
 			list = append(list, *p)
 		}
@@ -129,6 +169,29 @@ func (m *MockProductRepository) Delete(ctx context.Context, id int) error {
 	}
 	delete(m.Products, id)
 	return nil
+}
+
+func (m *MockProductRepository) SoftDelete(ctx context.Context, id int) error {
+	p, exists := m.Products[id]
+	if !exists {
+		return errors.New("product not found")
+	}
+	p.IsDeleted = true
+	p.IsAvailable = false
+	return nil
+}
+
+func (m *MockProductRepository) HasOrderHistory(ctx context.Context, id int) (bool, error) {
+	return false, nil
+}
+
+func (m *MockProductRepository) HasProductsInCategory(ctx context.Context, categoryID int) (bool, error) {
+	for _, p := range m.Products {
+		if !p.IsDeleted && p.CategoryID != nil && *p.CategoryID == categoryID {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (m *MockProductRepository) CreateCategory(ctx context.Context, c *models.Category) error {
@@ -189,12 +252,13 @@ func (m *MockOrderRepository) GetByUserID(ctx context.Context, userID int) ([]mo
 
 func (m *MockOrderRepository) GetOrderItems(ctx context.Context, orderID int) ([]dto.OrderItemResponse, error) {
 	var list []dto.OrderItemResponse
-	items := m.OrderItems[orderID]
-	for _, it := range items {
+	for _, it := range m.OrderItems[orderID] {
 		list = append(list, dto.OrderItemResponse{
-			ProductID:   it.ProductID,
-			Quantity:    it.Quantity,
-			Price:       it.Price,
+			ProductID:       it.ProductID,
+			ProductName:     it.ProductName,
+			ProductImageURL: it.ProductImageURL,
+			Quantity:        it.Quantity,
+			Price:           it.Price,
 		})
 	}
 	return list, nil
@@ -273,59 +337,60 @@ func (m *MockReservationRepository) UpdateStatusByID(ctx context.Context, id int
 	return nil
 }
 
+type MockBlogPostRepository struct{}
+
+func (m *MockBlogPostRepository) GetAll(ctx context.Context, publishedOnly bool) ([]models.BlogPost, error) {
+	return nil, nil
+}
+func (m *MockBlogPostRepository) GetByID(ctx context.Context, id int) (*models.BlogPost, error) {
+	return nil, errors.New("not found")
+}
+func (m *MockBlogPostRepository) Create(ctx context.Context, p *models.BlogPost) error { return nil }
+func (m *MockBlogPostRepository) Update(ctx context.Context, p *models.BlogPost) error { return nil }
+func (m *MockBlogPostRepository) Delete(ctx context.Context, id int) error              { return nil }
+
+type MockAuditLogRepository struct{}
+
+func (m *MockAuditLogRepository) Log(ctx context.Context, adminID *int, action, entityType string, entityID *int, details string) error {
+	return nil
+}
+func (m *MockAuditLogRepository) GetAll(ctx context.Context) ([]models.AuditLog, error) {
+	return nil, nil
+}
+
 // --- TESTS ---
 
 func TestAuthService_RegisterAndLogin(t *testing.T) {
 	userRepo := NewMockUserRepository()
-	jwtSecret := "my-secret-key"
-	authService := NewAuthService(userRepo, jwtSecret)
-
+	authService := NewAuthService(userRepo, "my-secret-key")
 	ctx := context.Background()
 
-	// 1. Register User
-	regReq := dto.RegisterRequest{
-		Name:     "Test User",
-		Phone:    "+79998887766",
-		Password: "password123",
-	}
+	regReq := dto.RegisterRequest{Name: "Test User", Phone: "+79998887766", Password: "password123"}
 
 	userResp, err := authService.Register(ctx, regReq)
 	if err != nil {
 		t.Fatalf("Expected no error on Register, got: %v", err)
 	}
-
 	if userResp.Name != regReq.Name || userResp.Phone != regReq.Phone {
 		t.Errorf("Registered user name/phone mismatch. Got name: %s, phone: %s", userResp.Name, userResp.Phone)
 	}
 
-	// 2. Register Duplicate Phone (should fail)
-	_, err = authService.Register(ctx, regReq)
-	if err == nil {
+	// Duplicate phone should fail
+	if _, err = authService.Register(ctx, regReq); err == nil {
 		t.Error("Expected error when registering user with duplicate phone, got nil")
 	}
 
-	// 3. Login User (Success)
-	loginReq := dto.LoginRequest{
-		Phone:    "+79998887766",
-		Password: "password123",
-	}
-
-	token, err := authService.Login(ctx, loginReq)
+	// Successful login
+	token, err := authService.Login(ctx, dto.LoginRequest{Phone: "+79998887766", Password: "password123"})
 	if err != nil {
 		t.Fatalf("Expected no error on Login, got: %v", err)
 	}
-
 	if token == "" {
 		t.Error("Expected non-empty JWT token on successful login")
 	}
 
-	// 4. Login User (Wrong Password)
-	loginReqWrong := dto.LoginRequest{
-		Phone:    "+79998887766",
-		Password: "wrongpassword",
-	}
-	_, err = authService.Login(ctx, loginReqWrong)
-	if err == nil {
+	// Wrong password
+	if _, err = authService.Login(ctx, dto.LoginRequest{Phone: "+79998887766", Password: "wrongpassword"}); err == nil {
 		t.Error("Expected error on login with incorrect password, got nil")
 	}
 }
@@ -335,55 +400,17 @@ func TestAdminService_GetStats(t *testing.T) {
 	resRepo := NewMockReservationRepository()
 	productRepo := NewMockProductRepository()
 
-	adminService := NewAdminService(orderRepo, resRepo, productRepo)
+	adminService := NewAdminService(orderRepo, resRepo, productRepo, &MockBlogPostRepository{}, NewMockUserRepository(), &MockAuditLogRepository{})
 	ctx := context.Background()
 
-	// Add test orders
-	price1 := 150.00
-	price2 := 250.00
-	
-	orderRepo.Create(ctx, &models.Order{
-		CustomerName:  "Customer 1",
-		Phone:         "111",
-		Address:       "Addr 1",
-		TotalPrice:    price1,
-		PaymentStatus: "paid",
-	}, nil)
+	orderRepo.Create(ctx, &models.Order{CustomerName: "Customer 1", Phone: "111", Address: "Addr 1", TotalPrice: 150.00, PaymentStatus: "paid"}, nil)
+	orderRepo.Create(ctx, &models.Order{CustomerName: "Customer 2", Phone: "222", Address: "Addr 2", TotalPrice: 250.00, PaymentStatus: "paid"}, nil)
+	orderRepo.Create(ctx, &models.Order{CustomerName: "Customer 3", Phone: "333", Address: "Addr 3", TotalPrice: 500.00, PaymentStatus: "cancelled"}, nil)
 
-	orderRepo.Create(ctx, &models.Order{
-		CustomerName:  "Customer 2",
-		Phone:         "222",
-		Address:       "Addr 2",
-		TotalPrice:    price2,
-		PaymentStatus: "paid",
-	}, nil)
+	resRepo.Create(ctx, &models.Reservation{CustomerName: "Reserver 1", Phone: "111", ReserveDate: time.Now(), GuestsCount: 4})
 
-	// Add cancelled order (should not count in revenue)
-	orderRepo.Create(ctx, &models.Order{
-		CustomerName:  "Customer 3",
-		Phone:         "333",
-		Address:       "Addr 3",
-		TotalPrice:    500.00,
-		PaymentStatus: "cancelled",
-	}, nil)
-
-	// Add reservations
-	resRepo.Create(ctx, &models.Reservation{
-		CustomerName: "Reserver 1",
-		Phone:        "111",
-		ReserveDate:  time.Now(),
-		GuestsCount:  4,
-	})
-
-	// Add products
-	productRepo.Create(ctx, &models.Product{
-		Name:  "Buuzy",
-		Price: 90.00,
-	})
-	productRepo.Create(ctx, &models.Product{
-		Name:  "Shulen",
-		Price: 250.00,
-	})
+	productRepo.Create(ctx, &models.Product{Name: "Buuzy", Price: 90.00})
+	productRepo.Create(ctx, &models.Product{Name: "Shulen", Price: 250.00})
 
 	stats, err := adminService.GetStats(ctx, "", "")
 	if err != nil {
@@ -393,18 +420,13 @@ func TestAdminService_GetStats(t *testing.T) {
 	if stats["total_orders"].(int) != 3 {
 		t.Errorf("Expected 3 orders, got: %v", stats["total_orders"])
 	}
-
 	if stats["total_reservations"].(int) != 1 {
 		t.Errorf("Expected 1 reservation, got: %v", stats["total_reservations"])
 	}
-
 	if stats["total_products"].(int) != 2 {
 		t.Errorf("Expected 2 products, got: %v", stats["total_products"])
 	}
-
-	// Total revenue should be price1 + price2 = 400.00 (ignoring the cancelled 500.00 order)
-	expectedRevenue := 400.00
-	if stats["total_revenue"].(float64) != expectedRevenue {
-		t.Errorf("Expected total revenue of %f, got: %f", expectedRevenue, stats["total_revenue"])
+	if stats["total_revenue"].(float64) != 400.00 {
+		t.Errorf("Expected total revenue of 400.00, got: %f", stats["total_revenue"])
 	}
 }

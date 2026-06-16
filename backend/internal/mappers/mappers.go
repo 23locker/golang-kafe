@@ -46,6 +46,7 @@ func ToProductResponse(p *models.Product) dto.ProductResponse {
 		Weight:      p.Weight,
 		Calories:    p.Calories,
 		IsAvailable: p.IsAvailable,
+		IsDeleted:   p.IsDeleted,
 	}
 }
 

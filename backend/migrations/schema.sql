@@ -78,3 +78,30 @@ ALTER TABLE reservations ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'ne
 ALTER TABLE products ADD COLUMN IF NOT EXISTS is_available BOOLEAN DEFAULT TRUE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'user';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255);
+
+-- Soft delete support for products
+ALTER TABLE products ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE;
+
+-- Snapshots in order items for immutable order history
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS product_name VARCHAR(255);
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS product_image_url VARCHAR(255);
+
+-- Remove old restrictive FK so soft-deleted products still work
+ALTER TABLE order_items DROP CONSTRAINT IF EXISTS order_items_product_id_fkey;
+ALTER TABLE order_items ADD CONSTRAINT order_items_product_id_fkey
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL;
+
+-- Admin audit log
+CREATE TABLE IF NOT EXISTS admin_audit_log (
+    id SERIAL PRIMARY KEY,
+    admin_id INT REFERENCES users(id) ON DELETE SET NULL,
+    action VARCHAR(255) NOT NULL,
+    entity_type VARCHAR(100),
+    entity_id INT,
+    details TEXT,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Migrate old role names to new ones
+UPDATE users SET role = 'super_admin' WHERE role = 'chief_admin';
+UPDATE users SET role = 'admin' WHERE role = 'establishment_admin';

@@ -23,6 +23,19 @@ type UserResponse struct {
 	Role           string  `json:"role"`
 }
 
+type AdminUserResponse struct {
+	ID             int     `json:"id"`
+	Name           string  `json:"name"`
+	Phone          string  `json:"phone"`
+	Email          *string `json:"email"`
+	DefaultAddress *string `json:"default_address"`
+	Role           string  `json:"role"`
+}
+
+type UpdateRoleRequest struct {
+	Role string `json:"role"`
+}
+
 type CategoryResponse struct {
 	ID   int    `json:"id"`
 	Name string `json:"name"`
@@ -39,6 +52,7 @@ type ProductResponse struct {
 	Weight      int     `json:"weight"`
 	Calories    int     `json:"calories"`
 	IsAvailable bool    `json:"is_available"`
+	IsDeleted   bool    `json:"is_deleted"`
 }
 
 type OrderItemRequest struct {
@@ -55,11 +69,12 @@ type CreateOrderRequest struct {
 }
 
 type OrderItemResponse struct {
-	ID          int     `json:"id"`
-	ProductID   int     `json:"product_id"`
-	ProductName string  `json:"product_name"`
-	Quantity    int     `json:"quantity"`
-	Price       float64 `json:"price"`
+	ID              int     `json:"id"`
+	ProductID       int     `json:"product_id"`
+	ProductName     string  `json:"product_name"`
+	ProductImageURL string  `json:"product_image_url"`
+	Quantity        int     `json:"quantity"`
+	Price           float64 `json:"price"`
 }
 
 type OrderResponse struct {
@@ -107,4 +122,14 @@ type ReservationResponse struct {
 	GuestsCount  int       `json:"guests_count"`
 	Comment      string    `json:"comment"`
 	Status       string    `json:"status"`
+}
+
+type AuditLogResponse struct {
+	ID         int       `json:"id"`
+	AdminID    *int      `json:"admin_id"`
+	Action     string    `json:"action"`
+	EntityType string    `json:"entity_type"`
+	EntityID   *int      `json:"entity_id"`
+	Details    string    `json:"details"`
+	CreatedAt  time.Time `json:"created_at"`
 }

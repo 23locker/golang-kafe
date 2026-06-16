@@ -29,6 +29,7 @@ type Product struct {
 	Weight      int
 	Calories    int
 	IsAvailable bool
+	IsDeleted   bool
 }
 
 type Order struct {
@@ -44,11 +45,13 @@ type Order struct {
 }
 
 type OrderItem struct {
-	ID        int
-	OrderID   int
-	ProductID int
-	Quantity  int
-	Price     float64
+	ID              int
+	OrderID         int
+	ProductID       int
+	ProductName     string
+	ProductImageURL string
+	Quantity        int
+	Price           float64
 }
 
 type BlogPost struct {
@@ -74,4 +77,14 @@ type Reservation struct {
 	GuestsCount  int
 	Comment      string
 	Status       string
+}
+
+type AuditLog struct {
+	ID         int
+	AdminID    *int
+	Action     string
+	EntityType string
+	EntityID   *int
+	Details    string
+	CreatedAt  time.Time
 }

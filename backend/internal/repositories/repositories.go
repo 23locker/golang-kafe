@@ -17,15 +17,22 @@ type UserRepository interface {
 	GetByPhone(ctx context.Context, phone string) (*models.User, error)
 	UpdateAddress(ctx context.Context, userID int, address string) error
 	UpdateEmail(ctx context.Context, userID int, email string) error
+	GetAll(ctx context.Context) ([]models.User, error)
+	UpdateRole(ctx context.Context, userID int, role string) error
+	CountByRole(ctx context.Context, role string) (int, error)
+	Delete(ctx context.Context, id int) error
 }
 
 type ProductRepository interface {
 	GetCategories(ctx context.Context) ([]models.Category, error)
-	GetProducts(ctx context.Context, categoryID *int) ([]models.Product, error)
+	GetProducts(ctx context.Context, categoryID *int, includeDeleted bool) ([]models.Product, error)
 	GetProductByID(ctx context.Context, id int) (*models.Product, error)
 	Create(ctx context.Context, p *models.Product) error
 	Update(ctx context.Context, p *models.Product) error
 	Delete(ctx context.Context, id int) error
+	SoftDelete(ctx context.Context, id int) error
+	HasOrderHistory(ctx context.Context, id int) (bool, error)
+	HasProductsInCategory(ctx context.Context, categoryID int) (bool, error)
 	CreateCategory(ctx context.Context, c *models.Category) error
 	UpdateCategory(ctx context.Context, c *models.Category) error
 	DeleteCategory(ctx context.Context, id int) error
@@ -54,6 +61,13 @@ type ReservationRepository interface {
 	GetAll(ctx context.Context) ([]models.Reservation, error)
 	UpdateStatusByID(ctx context.Context, id int, status string) error
 }
+
+type AuditLogRepository interface {
+	Log(ctx context.Context, adminID *int, action, entityType string, entityID *int, details string) error
+	GetAll(ctx context.Context) ([]models.AuditLog, error)
+}
+
+// PostgresUserRepository
 
 type PostgresUserRepository struct {
 	db *sql.DB
@@ -120,6 +134,54 @@ func (r *PostgresUserRepository) UpdateEmail(ctx context.Context, userID int, em
 	return nil
 }
 
+func (r *PostgresUserRepository) GetAll(ctx context.Context) ([]models.User, error) {
+	query := `SELECT id, name, phone, email, password_hash, default_address, role, created_at FROM users ORDER BY created_at DESC`
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка получения пользователей: %w", err)
+	}
+	defer rows.Close()
+
+	var list []models.User
+	for rows.Next() {
+		var u models.User
+		if err := rows.Scan(&u.ID, &u.Name, &u.Phone, &u.Email, &u.PasswordHash, &u.DefaultAddress, &u.Role, &u.CreatedAt); err != nil {
+			return nil, fmt.Errorf("ошибка сканирования пользователя: %w", err)
+		}
+		list = append(list, u)
+	}
+	return list, nil
+}
+
+func (r *PostgresUserRepository) UpdateRole(ctx context.Context, userID int, role string) error {
+	query := `UPDATE users SET role = $1 WHERE id = $2`
+	_, err := r.db.ExecContext(ctx, query, role, userID)
+	if err != nil {
+		return fmt.Errorf("ошибка обновления роли пользователя: %w", err)
+	}
+	return nil
+}
+
+func (r *PostgresUserRepository) CountByRole(ctx context.Context, role string) (int, error) {
+	query := `SELECT COUNT(*) FROM users WHERE role = $1`
+	var count int
+	if err := r.db.QueryRowContext(ctx, query, role).Scan(&count); err != nil {
+		return 0, fmt.Errorf("ошибка подсчёта пользователей: %w", err)
+	}
+	return count, nil
+}
+
+func (r *PostgresUserRepository) Delete(ctx context.Context, id int) error {
+	query := `DELETE FROM users WHERE id = $1`
+	_, err := r.db.ExecContext(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("ошибка удаления пользователя: %w", err)
+	}
+	return nil
+}
+
+// PostgresProductRepository
+
 type PostgresProductRepository struct {
 	db *sql.DB
 }
@@ -147,16 +209,20 @@ func (r *PostgresProductRepository) GetCategories(ctx context.Context) ([]models
 	return list, nil
 }
 
-func (r *PostgresProductRepository) GetProducts(ctx context.Context, categoryID *int) ([]models.Product, error) {
-	var query string
+func (r *PostgresProductRepository) GetProducts(ctx context.Context, categoryID *int, includeDeleted bool) ([]models.Product, error) {
+	deletedClause := ""
+	if !includeDeleted {
+		deletedClause = " AND is_deleted = FALSE"
+	}
+
 	var rows *sql.Rows
 	var err error
 
 	if categoryID != nil {
-		query = `SELECT id, name, description, price, category_id, image_url, weight, calories, is_available FROM products WHERE category_id = $1`
+		query := `SELECT id, name, description, price, category_id, image_url, weight, calories, is_available, is_deleted FROM products WHERE category_id = $1` + deletedClause
 		rows, err = r.db.QueryContext(ctx, query, *categoryID)
 	} else {
-		query = `SELECT id, name, description, price, category_id, image_url, weight, calories, is_available FROM products`
+		query := `SELECT id, name, description, price, category_id, image_url, weight, calories, is_available, is_deleted FROM products WHERE 1=1` + deletedClause
 		rows, err = r.db.QueryContext(ctx, query)
 	}
 
@@ -168,7 +234,7 @@ func (r *PostgresProductRepository) GetProducts(ctx context.Context, categoryID 
 	var list []models.Product
 	for rows.Next() {
 		var p models.Product
-		if err := rows.Scan(&p.ID, &p.Name, &p.Description, &p.Price, &p.CategoryID, &p.ImageURL, &p.Weight, &p.Calories, &p.IsAvailable); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Description, &p.Price, &p.CategoryID, &p.ImageURL, &p.Weight, &p.Calories, &p.IsAvailable, &p.IsDeleted); err != nil {
 			return nil, fmt.Errorf("ошибка сканирования товара: %w", err)
 		}
 		list = append(list, p)
@@ -177,9 +243,9 @@ func (r *PostgresProductRepository) GetProducts(ctx context.Context, categoryID 
 }
 
 func (r *PostgresProductRepository) GetProductByID(ctx context.Context, id int) (*models.Product, error) {
-	query := `SELECT id, name, description, price, category_id, image_url, weight, calories, is_available FROM products WHERE id = $1`
+	query := `SELECT id, name, description, price, category_id, image_url, weight, calories, is_available, is_deleted FROM products WHERE id = $1`
 	var p models.Product
-	err := r.db.QueryRowContext(ctx, query, id).Scan(&p.ID, &p.Name, &p.Description, &p.Price, &p.CategoryID, &p.ImageURL, &p.Weight, &p.Calories, &p.IsAvailable)
+	err := r.db.QueryRowContext(ctx, query, id).Scan(&p.ID, &p.Name, &p.Description, &p.Price, &p.CategoryID, &p.ImageURL, &p.Weight, &p.Calories, &p.IsAvailable, &p.IsDeleted)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("товар не найден")
@@ -190,8 +256,8 @@ func (r *PostgresProductRepository) GetProductByID(ctx context.Context, id int) 
 }
 
 func (r *PostgresProductRepository) Create(ctx context.Context, p *models.Product) error {
-	query := `INSERT INTO products (name, description, price, category_id, image_url, weight, calories, is_available) 
-	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`
+	query := `INSERT INTO products (name, description, price, category_id, image_url, weight, calories, is_available, is_deleted)
+	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, FALSE) RETURNING id`
 	err := r.db.QueryRowContext(ctx, query, p.Name, p.Description, p.Price, p.CategoryID, p.ImageURL, p.Weight, p.Calories, p.IsAvailable).Scan(&p.ID)
 	if err != nil {
 		return fmt.Errorf("ошибка добавления товара в базу: %w", err)
@@ -200,7 +266,7 @@ func (r *PostgresProductRepository) Create(ctx context.Context, p *models.Produc
 }
 
 func (r *PostgresProductRepository) Update(ctx context.Context, p *models.Product) error {
-	query := `UPDATE products SET name = $1, description = $2, price = $3, category_id = $4, image_url = $5, weight = $6, calories = $7, is_available = $8 
+	query := `UPDATE products SET name = $1, description = $2, price = $3, category_id = $4, image_url = $5, weight = $6, calories = $7, is_available = $8
 	          WHERE id = $9`
 	_, err := r.db.ExecContext(ctx, query, p.Name, p.Description, p.Price, p.CategoryID, p.ImageURL, p.Weight, p.Calories, p.IsAvailable, p.ID)
 	if err != nil {
@@ -216,6 +282,33 @@ func (r *PostgresProductRepository) Delete(ctx context.Context, id int) error {
 		return fmt.Errorf("ошибка удаления товара из базы: %w", err)
 	}
 	return nil
+}
+
+func (r *PostgresProductRepository) SoftDelete(ctx context.Context, id int) error {
+	query := `UPDATE products SET is_deleted = TRUE, is_available = FALSE WHERE id = $1`
+	_, err := r.db.ExecContext(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("ошибка мягкого удаления товара: %w", err)
+	}
+	return nil
+}
+
+func (r *PostgresProductRepository) HasOrderHistory(ctx context.Context, id int) (bool, error) {
+	query := `SELECT EXISTS(SELECT 1 FROM order_items WHERE product_id = $1)`
+	var exists bool
+	if err := r.db.QueryRowContext(ctx, query, id).Scan(&exists); err != nil {
+		return false, fmt.Errorf("ошибка проверки истории заказов: %w", err)
+	}
+	return exists, nil
+}
+
+func (r *PostgresProductRepository) HasProductsInCategory(ctx context.Context, categoryID int) (bool, error) {
+	query := `SELECT EXISTS(SELECT 1 FROM products WHERE category_id = $1 AND is_deleted = FALSE)`
+	var exists bool
+	if err := r.db.QueryRowContext(ctx, query, categoryID).Scan(&exists); err != nil {
+		return false, fmt.Errorf("ошибка проверки товаров в категории: %w", err)
+	}
+	return exists, nil
 }
 
 func (r *PostgresProductRepository) CreateCategory(ctx context.Context, c *models.Category) error {
@@ -245,6 +338,8 @@ func (r *PostgresProductRepository) DeleteCategory(ctx context.Context, id int) 
 	return nil
 }
 
+// PostgresOrderRepository
+
 type PostgresOrderRepository struct {
 	db *sql.DB
 }
@@ -260,16 +355,16 @@ func (r *PostgresOrderRepository) Create(ctx context.Context, o *models.Order, i
 	}
 	defer tx.Rollback()
 
-	queryOrder := `INSERT INTO orders (user_id, customer_name, phone, address, total_price, payment_status, payment_id) 
+	queryOrder := `INSERT INTO orders (user_id, customer_name, phone, address, total_price, payment_status, payment_id)
 	               VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, created_at`
 	err = tx.QueryRowContext(ctx, queryOrder, o.UserID, o.CustomerName, o.Phone, o.Address, o.TotalPrice, o.PaymentStatus, o.PaymentID).Scan(&o.ID, &o.CreatedAt)
 	if err != nil {
 		return fmt.Errorf("ошибка записи заказа: %w", err)
 	}
 
-	queryItem := `INSERT INTO order_items (order_id, product_id, quantity, price) VALUES ($1, $2, $3, $4)`
+	queryItem := `INSERT INTO order_items (order_id, product_id, product_name, product_image_url, quantity, price) VALUES ($1, $2, $3, $4, $5, $6)`
 	for i := range items {
-		_, err := tx.ExecContext(ctx, queryItem, o.ID, items[i].ProductID, items[i].Quantity, items[i].Price)
+		_, err := tx.ExecContext(ctx, queryItem, o.ID, items[i].ProductID, items[i].ProductName, items[i].ProductImageURL, items[i].Quantity, items[i].Price)
 		if err != nil {
 			return fmt.Errorf("ошибка записи элемента заказа: %w", err)
 		}
@@ -282,7 +377,7 @@ func (r *PostgresOrderRepository) Create(ctx context.Context, o *models.Order, i
 }
 
 func (r *PostgresOrderRepository) GetByUserID(ctx context.Context, userID int) ([]models.Order, error) {
-	query := `SELECT id, user_id, customer_name, phone, address, total_price, payment_status, payment_id, created_at 
+	query := `SELECT id, user_id, customer_name, phone, address, total_price, payment_status, payment_id, created_at
 	          FROM orders WHERE user_id = $1 ORDER BY created_at DESC`
 	rows, err := r.db.QueryContext(ctx, query, userID)
 	if err != nil {
@@ -293,8 +388,7 @@ func (r *PostgresOrderRepository) GetByUserID(ctx context.Context, userID int) (
 	var list []models.Order
 	for rows.Next() {
 		var o models.Order
-		err := rows.Scan(&o.ID, &o.UserID, &o.CustomerName, &o.Phone, &o.Address, &o.TotalPrice, &o.PaymentStatus, &o.PaymentID, &o.CreatedAt)
-		if err != nil {
+		if err := rows.Scan(&o.ID, &o.UserID, &o.CustomerName, &o.Phone, &o.Address, &o.TotalPrice, &o.PaymentStatus, &o.PaymentID, &o.CreatedAt); err != nil {
 			return nil, fmt.Errorf("ошибка сканирования заказа: %w", err)
 		}
 		list = append(list, o)
@@ -303,10 +397,14 @@ func (r *PostgresOrderRepository) GetByUserID(ctx context.Context, userID int) (
 }
 
 func (r *PostgresOrderRepository) GetOrderItems(ctx context.Context, orderID int) ([]dto.OrderItemResponse, error) {
-	query := `SELECT oi.id, oi.product_id, p.name, oi.quantity, oi.price 
-	          FROM order_items oi
-	          JOIN products p ON oi.product_id = p.id
-	          WHERE oi.order_id = $1`
+	// Use snapshot columns from order_items; fall back to JOIN with products for legacy rows
+	query := `SELECT oi.id, oi.product_id,
+		COALESCE(oi.product_name, p.name, 'Товар удалён') AS product_name,
+		oi.quantity, oi.price,
+		COALESCE(oi.product_image_url, p.image_url, '') AS product_image_url
+		FROM order_items oi
+		LEFT JOIN products p ON oi.product_id = p.id
+		WHERE oi.order_id = $1`
 	rows, err := r.db.QueryContext(ctx, query, orderID)
 	if err != nil {
 		return nil, fmt.Errorf("ошибка получения позиций заказа: %w", err)
@@ -316,8 +414,7 @@ func (r *PostgresOrderRepository) GetOrderItems(ctx context.Context, orderID int
 	var list []dto.OrderItemResponse
 	for rows.Next() {
 		var item dto.OrderItemResponse
-		err := rows.Scan(&item.ID, &item.ProductID, &item.ProductName, &item.Quantity, &item.Price)
-		if err != nil {
+		if err := rows.Scan(&item.ID, &item.ProductID, &item.ProductName, &item.Quantity, &item.Price, &item.ProductImageURL); err != nil {
 			return nil, fmt.Errorf("ошибка сканирования позиции заказа: %w", err)
 		}
 		list = append(list, item)
@@ -335,7 +432,7 @@ func (r *PostgresOrderRepository) UpdatePaymentStatus(ctx context.Context, payme
 }
 
 func (r *PostgresOrderRepository) GetAll(ctx context.Context) ([]models.Order, error) {
-	query := `SELECT id, user_id, customer_name, phone, address, total_price, payment_status, payment_id, created_at 
+	query := `SELECT id, user_id, customer_name, phone, address, total_price, payment_status, payment_id, created_at
 	          FROM orders ORDER BY created_at DESC`
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
@@ -346,8 +443,7 @@ func (r *PostgresOrderRepository) GetAll(ctx context.Context) ([]models.Order, e
 	var list []models.Order
 	for rows.Next() {
 		var o models.Order
-		err := rows.Scan(&o.ID, &o.UserID, &o.CustomerName, &o.Phone, &o.Address, &o.TotalPrice, &o.PaymentStatus, &o.PaymentID, &o.CreatedAt)
-		if err != nil {
+		if err := rows.Scan(&o.ID, &o.UserID, &o.CustomerName, &o.Phone, &o.Address, &o.TotalPrice, &o.PaymentStatus, &o.PaymentID, &o.CreatedAt); err != nil {
 			return nil, fmt.Errorf("ошибка сканирования заказа: %w", err)
 		}
 		list = append(list, o)
@@ -363,6 +459,8 @@ func (r *PostgresOrderRepository) UpdateStatusByID(ctx context.Context, orderID 
 	}
 	return nil
 }
+
+// PostgresBlogPostRepository
 
 type PostgresBlogPostRepository struct {
 	db *sql.DB
@@ -438,6 +536,8 @@ func (r *PostgresBlogPostRepository) Delete(ctx context.Context, id int) error {
 	return nil
 }
 
+// PostgresReservationRepository
+
 type PostgresReservationRepository struct {
 	db *sql.DB
 }
@@ -450,7 +550,7 @@ func (r *PostgresReservationRepository) Create(ctx context.Context, res *models.
 	if res.Status == "" {
 		res.Status = "new"
 	}
-	query := `INSERT INTO reservations (user_id, customer_name, phone, reserve_date, reserve_time, guests_count, comment, status) 
+	query := `INSERT INTO reservations (user_id, customer_name, phone, reserve_date, reserve_time, guests_count, comment, status)
 	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`
 	err := r.db.QueryRowContext(ctx, query, res.UserID, res.CustomerName, res.Phone, res.ReserveDate, res.ReserveTime, res.GuestsCount, res.Comment, res.Status).Scan(&res.ID)
 	if err != nil {
@@ -460,7 +560,7 @@ func (r *PostgresReservationRepository) Create(ctx context.Context, res *models.
 }
 
 func (r *PostgresReservationRepository) GetByUserID(ctx context.Context, userID int) ([]models.Reservation, error) {
-	query := `SELECT id, user_id, customer_name, phone, reserve_date, reserve_time, guests_count, comment, status 
+	query := `SELECT id, user_id, customer_name, phone, reserve_date, reserve_time, guests_count, comment, status
 	          FROM reservations WHERE user_id = $1 ORDER BY reserve_date DESC, reserve_time DESC`
 	rows, err := r.db.QueryContext(ctx, query, userID)
 	if err != nil {
@@ -471,15 +571,12 @@ func (r *PostgresReservationRepository) GetByUserID(ctx context.Context, userID 
 	var list []models.Reservation
 	for rows.Next() {
 		var res models.Reservation
-		var dbDate string
-		var dbTime string
-		err := rows.Scan(&res.ID, &res.UserID, &res.CustomerName, &res.Phone, &dbDate, &dbTime, &res.GuestsCount, &res.Comment, &res.Status)
-		if err != nil {
+		var dbDate, dbTime string
+		if err := rows.Scan(&res.ID, &res.UserID, &res.CustomerName, &res.Phone, &dbDate, &dbTime, &res.GuestsCount, &res.Comment, &res.Status); err != nil {
 			return nil, fmt.Errorf("ошибка сканирования бронирования: %w", err)
 		}
-		parsedDate, parseErr := time.Parse("2006-01-02", dbDate[:10])
-		if parseErr == nil {
-			res.ReserveDate = parsedDate
+		if parsed, err := time.Parse("2006-01-02", dbDate[:10]); err == nil {
+			res.ReserveDate = parsed
 		}
 		res.ReserveTime = dbTime
 		list = append(list, res)
@@ -488,7 +585,7 @@ func (r *PostgresReservationRepository) GetByUserID(ctx context.Context, userID 
 }
 
 func (r *PostgresReservationRepository) GetAll(ctx context.Context) ([]models.Reservation, error) {
-	query := `SELECT id, user_id, customer_name, phone, reserve_date, reserve_time, guests_count, comment, status 
+	query := `SELECT id, user_id, customer_name, phone, reserve_date, reserve_time, guests_count, comment, status
 	          FROM reservations ORDER BY reserve_date DESC, reserve_time DESC`
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
@@ -499,15 +596,12 @@ func (r *PostgresReservationRepository) GetAll(ctx context.Context) ([]models.Re
 	var list []models.Reservation
 	for rows.Next() {
 		var res models.Reservation
-		var dbDate string
-		var dbTime string
-		err := rows.Scan(&res.ID, &res.UserID, &res.CustomerName, &res.Phone, &dbDate, &dbTime, &res.GuestsCount, &res.Comment, &res.Status)
-		if err != nil {
+		var dbDate, dbTime string
+		if err := rows.Scan(&res.ID, &res.UserID, &res.CustomerName, &res.Phone, &dbDate, &dbTime, &res.GuestsCount, &res.Comment, &res.Status); err != nil {
 			return nil, fmt.Errorf("ошибка сканирования бронирования: %w", err)
 		}
-		parsedDate, parseErr := time.Parse("2006-01-02", dbDate[:10])
-		if parseErr == nil {
-			res.ReserveDate = parsedDate
+		if parsed, err := time.Parse("2006-01-02", dbDate[:10]); err == nil {
+			res.ReserveDate = parsed
 		}
 		res.ReserveTime = dbTime
 		list = append(list, res)
@@ -522,4 +616,42 @@ func (r *PostgresReservationRepository) UpdateStatusByID(ctx context.Context, id
 		return fmt.Errorf("ошибка обновления статуса бронирования: %w", err)
 	}
 	return nil
+}
+
+// PostgresAuditLogRepository
+
+type PostgresAuditLogRepository struct {
+	db *sql.DB
+}
+
+func NewPostgresAuditLogRepository(db *sql.DB) *PostgresAuditLogRepository {
+	return &PostgresAuditLogRepository{db: db}
+}
+
+func (r *PostgresAuditLogRepository) Log(ctx context.Context, adminID *int, action, entityType string, entityID *int, details string) error {
+	query := `INSERT INTO admin_audit_log (admin_id, action, entity_type, entity_id, details) VALUES ($1, $2, $3, $4, $5)`
+	_, err := r.db.ExecContext(ctx, query, adminID, action, entityType, entityID, details)
+	if err != nil {
+		return fmt.Errorf("ошибка записи в журнал аудита: %w", err)
+	}
+	return nil
+}
+
+func (r *PostgresAuditLogRepository) GetAll(ctx context.Context) ([]models.AuditLog, error) {
+	query := `SELECT id, admin_id, action, entity_type, entity_id, details, created_at FROM admin_audit_log ORDER BY created_at DESC`
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка получения журнала аудита: %w", err)
+	}
+	defer rows.Close()
+
+	var list []models.AuditLog
+	for rows.Next() {
+		var l models.AuditLog
+		if err := rows.Scan(&l.ID, &l.AdminID, &l.Action, &l.EntityType, &l.EntityID, &l.Details, &l.CreatedAt); err != nil {
+			return nil, fmt.Errorf("ошибка сканирования записи аудита: %w", err)
+		}
+		list = append(list, l)
+	}
+	return list, nil
 }

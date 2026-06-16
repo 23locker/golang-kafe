@@ -45,12 +45,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("ошибка чтения файла миграции: %v", err)
 	}
-
-	_, err = db.Exec(string(migrationData))
-	if err != nil {
+	if _, err = db.Exec(string(migrationData)); err != nil {
 		log.Fatalf("ошибка применения миграции базы данных: %v", err)
 	}
-
 	log.Println("база данных успешно инициализирована")
 
 	userRepo := repositories.NewPostgresUserRepository(db)
@@ -58,42 +55,44 @@ func main() {
 	orderRepo := repositories.NewPostgresOrderRepository(db)
 	resRepo := repositories.NewPostgresReservationRepository(db)
 	blogRepo := repositories.NewPostgresBlogPostRepository(db)
+	auditRepo := repositories.NewPostgresAuditLogRepository(db)
 
 	authServ := services.NewAuthService(userRepo, cfg.JWTSecret)
 	prodServ := services.NewProductService(productRepo)
 	orderServ := services.NewOrderService(orderRepo, productRepo)
 	resServ := services.NewReservationService(resRepo)
 	blogServ := services.NewBlogService(blogRepo)
-	adminServ := services.NewAdminService(orderRepo, resRepo, productRepo, blogRepo)
+	adminServ := services.NewAdminService(orderRepo, resRepo, productRepo, blogRepo, userRepo, auditRepo)
 
-	// Инициализация администраторов по умолчанию
 	ctx := context.Background()
 
-	defaultAdmins := []struct {
+	defaultAccounts := []struct {
 		name  string
 		phone string
+		role  string
 	}{
-		{"Главный Администратор", "+7988548955"},
-		{"Администратор", "+79991234567"},
+		{"Суперадминистратор", "+79991234567", "super_admin"},
+		{"Главный Администратор", "+7988548955", "super_admin"},
 	}
-	for _, a := range defaultAdmins {
-		_, err = userRepo.GetByPhone(ctx, a.phone)
-		if err != nil {
+	for _, a := range defaultAccounts {
+		if _, err := userRepo.GetByPhone(ctx, a.phone); err != nil {
 			hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("123456"), bcrypt.DefaultCost)
 			admin := &models.User{
 				Name:         a.name,
 				Phone:        a.phone,
 				PasswordHash: string(hashedPassword),
-				Role:         "chief_admin",
+				Role:         a.role,
 			}
-			_ = userRepo.Create(ctx, admin)
-			log.Printf("Создан администратор: %s", a.phone)
+			if err := userRepo.Create(ctx, admin); err != nil {
+				log.Printf("ошибка создания аккаунта %s: %v", a.phone, err)
+			} else {
+				log.Printf("создан аккаунт: %s (%s)", a.name, a.phone)
+			}
 		}
 	}
 
 	h := handlers.NewHandler(authServ, prodServ, orderServ, resServ, adminServ, blogServ, cfg.JWTSecret)
 
-	// Создаем директорию uploads, если она не существует
 	if err := os.MkdirAll("uploads", 0755); err != nil {
 		log.Fatalf("ошибка создания директории uploads: %v", err)
 	}

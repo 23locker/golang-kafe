@@ -3,16 +3,14 @@ package services
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
-	"regexp"
-	"strings"
 	"time"
 
 	"backend/internal/dto"
 	"backend/internal/mappers"
 	"backend/internal/models"
 	"backend/internal/repositories"
+
+	"regexp"
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
@@ -61,22 +59,39 @@ type BlogService interface {
 }
 
 type AdminService interface {
+	// Orders & reservations
 	GetOrders(ctx context.Context) ([]dto.OrderResponse, error)
 	UpdateOrderStatus(ctx context.Context, orderID int, status string) error
 	GetReservations(ctx context.Context) ([]dto.ReservationResponse, error)
 	UpdateReservationStatus(ctx context.Context, id int, status string) error
+	// Products (admin view includes deleted)
+	GetAdminProducts(ctx context.Context, categoryID *int) ([]dto.ProductResponse, error)
+	GetAdminProductByID(ctx context.Context, id int) (dto.ProductResponse, error)
 	CreateProduct(ctx context.Context, req dto.ProductResponse) (dto.ProductResponse, error)
 	UpdateProduct(ctx context.Context, id int, req dto.ProductResponse) (dto.ProductResponse, error)
-	DeleteProduct(ctx context.Context, id int) error
+	// DeleteProduct returns softDeleted=true when the product had order history and was soft-deleted
+	DeleteProduct(ctx context.Context, id int) (softDeleted bool, err error)
+	// Categories
 	CreateCategory(ctx context.Context, req dto.CategoryResponse) (dto.CategoryResponse, error)
 	UpdateCategory(ctx context.Context, id int, req dto.CategoryResponse) (dto.CategoryResponse, error)
 	DeleteCategory(ctx context.Context, id int) error
-	GetStats(ctx context.Context, startDate, endDate string) (map[string]interface{}, error)
+	// Blog
 	GetAllBlogPosts(ctx context.Context) ([]dto.BlogPostResponse, error)
 	CreateBlogPost(ctx context.Context, req dto.BlogPostResponse) (dto.BlogPostResponse, error)
 	UpdateBlogPost(ctx context.Context, id int, req dto.BlogPostResponse) (dto.BlogPostResponse, error)
 	DeleteBlogPost(ctx context.Context, id int) error
+	// Stats
+	GetStats(ctx context.Context, startDate, endDate string) (map[string]interface{}, error)
+	// User management (super_admin only)
+	GetUsers(ctx context.Context) ([]dto.AdminUserResponse, error)
+	UpdateUserRole(ctx context.Context, targetUserID, currentAdminID int, newRole string) error
+	DeleteUser(ctx context.Context, targetUserID, currentAdminID int) error
+	// Audit log
+	GetAuditLog(ctx context.Context) ([]dto.AuditLogResponse, error)
+	LogAudit(ctx context.Context, adminID *int, action, entityType string, entityID *int, details string) error
 }
+
+// AuthServiceImpl
 
 type AuthServiceImpl struct {
 	userRepo  repositories.UserRepository
@@ -84,27 +99,20 @@ type AuthServiceImpl struct {
 }
 
 func NewAuthService(userRepo repositories.UserRepository, jwtSecret string) *AuthServiceImpl {
-	return &AuthServiceImpl{
-		userRepo:  userRepo,
-		jwtSecret: jwtSecret,
-	}
+	return &AuthServiceImpl{userRepo: userRepo, jwtSecret: jwtSecret}
 }
 
 func (s *AuthServiceImpl) Register(ctx context.Context, req dto.RegisterRequest) (*dto.UserResponse, error) {
 	if req.Name == "" || req.Phone == "" || req.Password == "" {
 		return nil, fmt.Errorf("имя, телефон и пароль обязательны для заполнения")
 	}
-
 	if err := validatePhone(req.Phone); err != nil {
 		return nil, err
 	}
-
 	if len(req.Password) < 6 {
 		return nil, fmt.Errorf("пароль должен содержать не менее 6 символов")
 	}
-
-	_, err := s.userRepo.GetByPhone(ctx, req.Phone)
-	if err == nil {
+	if _, err := s.userRepo.GetByPhone(ctx, req.Phone); err == nil {
 		return nil, fmt.Errorf("пользователь с таким номером телефона уже существует")
 	}
 
@@ -122,11 +130,9 @@ func (s *AuthServiceImpl) Register(ctx context.Context, req dto.RegisterRequest)
 		u.Email = &req.Email
 	}
 
-	err = s.userRepo.Create(ctx, u)
-	if err != nil {
+	if err := s.userRepo.Create(ctx, u); err != nil {
 		return nil, err
 	}
-
 	return mappers.ToUserResponse(u), nil
 }
 
@@ -134,7 +140,6 @@ func (s *AuthServiceImpl) Login(ctx context.Context, req dto.LoginRequest) (stri
 	if req.Phone == "" || req.Password == "" {
 		return "", fmt.Errorf("телефон и пароль обязательны")
 	}
-
 	if err := validatePhone(req.Phone); err != nil {
 		return "", err
 	}
@@ -143,9 +148,7 @@ func (s *AuthServiceImpl) Login(ctx context.Context, req dto.LoginRequest) (stri
 	if err != nil {
 		return "", fmt.Errorf("неверный номер телефона или пароль")
 	}
-
-	err = bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(req.Password))
-	if err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(req.Password)); err != nil {
 		return "", fmt.Errorf("неверный номер телефона или пароль")
 	}
 
@@ -154,12 +157,10 @@ func (s *AuthServiceImpl) Login(ctx context.Context, req dto.LoginRequest) (stri
 		"role":    u.Role,
 		"exp":     time.Now().Add(24 * time.Hour).Unix(),
 	})
-
 	tokenStr, err := token.SignedString([]byte(s.jwtSecret))
 	if err != nil {
 		return "", fmt.Errorf("ошибка генерации токена сессии: %w", err)
 	}
-
 	return tokenStr, nil
 }
 
@@ -179,6 +180,8 @@ func (s *AuthServiceImpl) UpdateEmail(ctx context.Context, userID int, email str
 	return s.userRepo.UpdateEmail(ctx, userID, email)
 }
 
+// ProductServiceImpl
+
 type ProductServiceImpl struct {
 	productRepo repositories.ProductRepository
 }
@@ -196,7 +199,7 @@ func (s *ProductServiceImpl) GetCategories(ctx context.Context) ([]dto.CategoryR
 }
 
 func (s *ProductServiceImpl) GetProducts(ctx context.Context, categoryID *int) ([]dto.ProductResponse, error) {
-	products, err := s.productRepo.GetProducts(ctx, categoryID)
+	products, err := s.productRepo.GetProducts(ctx, categoryID, false)
 	if err != nil {
 		return nil, err
 	}
@@ -208,8 +211,13 @@ func (s *ProductServiceImpl) GetProductByID(ctx context.Context, id int) (dto.Pr
 	if err != nil {
 		return dto.ProductResponse{}, err
 	}
+	if p.IsDeleted {
+		return dto.ProductResponse{}, fmt.Errorf("товар не найден")
+	}
 	return mappers.ToProductResponse(p), nil
 }
+
+// OrderServiceImpl
 
 type OrderServiceImpl struct {
 	orderRepo   repositories.OrderRepository
@@ -217,17 +225,13 @@ type OrderServiceImpl struct {
 }
 
 func NewOrderService(orderRepo repositories.OrderRepository, productRepo repositories.ProductRepository) *OrderServiceImpl {
-	return &OrderServiceImpl{
-		orderRepo:   orderRepo,
-		productRepo: productRepo,
-	}
+	return &OrderServiceImpl{orderRepo: orderRepo, productRepo: productRepo}
 }
 
 func (s *OrderServiceImpl) CreateOrder(ctx context.Context, userID *int, req dto.CreateOrderRequest) (*dto.OrderResponse, error) {
 	if req.CustomerName == "" || req.Phone == "" || req.Address == "" || len(req.Items) == 0 {
 		return nil, fmt.Errorf("все поля заказа обязательны для заполнения")
 	}
-
 	if err := validatePhone(req.Phone); err != nil {
 		return nil, err
 	}
@@ -240,26 +244,27 @@ func (s *OrderServiceImpl) CreateOrder(ctx context.Context, userID *int, req dto
 		if err != nil {
 			return nil, fmt.Errorf("товар с идентификатором %d не найден", itemReq.ProductID)
 		}
+		if prod.IsDeleted {
+			return nil, fmt.Errorf("товар '%s' недоступен", prod.Name)
+		}
+		if !prod.IsAvailable {
+			return nil, fmt.Errorf("товар '%s' временно недоступен", prod.Name)
+		}
 
-		itemPrice := prod.Price
-		totalPrice += itemPrice * float64(itemReq.Quantity)
-
+		totalPrice += prod.Price * float64(itemReq.Quantity)
 		orderItems = append(orderItems, models.OrderItem{
-			ProductID: itemReq.ProductID,
-			Quantity:  itemReq.Quantity,
-			Price:     itemPrice,
+			ProductID:       itemReq.ProductID,
+			ProductName:     prod.Name,
+			ProductImageURL: prod.ImageURL,
+			Quantity:        itemReq.Quantity,
+			Price:           prod.Price,
 		})
 	}
 
-	var paymentStatus string
-	if req.PaymentMethod == "online" {
-		paymentStatus = "pending"
-	} else {
-		paymentStatus = "awaiting_delivery"
-	}
-
+	paymentStatus := "awaiting_delivery"
 	paymentID := ""
 	if req.PaymentMethod == "online" {
+		paymentStatus = "pending"
 		paymentID = fmt.Sprintf("pay_%d", time.Now().UnixNano())
 	}
 
@@ -275,19 +280,18 @@ func (s *OrderServiceImpl) CreateOrder(ctx context.Context, userID *int, req dto
 		o.PaymentID = &paymentID
 	}
 
-	err := s.orderRepo.Create(ctx, o, orderItems)
-	if err != nil {
+	if err := s.orderRepo.Create(ctx, o, orderItems); err != nil {
 		return nil, err
 	}
 
 	var itemResponses []dto.OrderItemResponse
 	for _, oi := range orderItems {
-		pInfo, _ := s.productRepo.GetProductByID(ctx, oi.ProductID)
 		itemResponses = append(itemResponses, dto.OrderItemResponse{
-			ProductID:   oi.ProductID,
-			ProductName: pInfo.Name,
-			Quantity:    oi.Quantity,
-			Price:       oi.Price,
+			ProductID:       oi.ProductID,
+			ProductName:     oi.ProductName,
+			ProductImageURL: oi.ProductImageURL,
+			Quantity:        oi.Quantity,
+			Price:           oi.Price,
 		})
 	}
 
@@ -300,7 +304,6 @@ func (s *OrderServiceImpl) GetOrdersByUserID(ctx context.Context, userID int) ([
 	if err != nil {
 		return nil, err
 	}
-
 	var res []dto.OrderResponse
 	for i := range orders {
 		items, err := s.orderRepo.GetOrderItems(ctx, orders[i].ID)
@@ -311,6 +314,8 @@ func (s *OrderServiceImpl) GetOrdersByUserID(ctx context.Context, userID int) ([
 	}
 	return res, nil
 }
+
+// ReservationServiceImpl
 
 type ReservationServiceImpl struct {
 	reservationRepo repositories.ReservationRepository
@@ -324,7 +329,6 @@ func (s *ReservationServiceImpl) CreateReservation(ctx context.Context, userID *
 	if req.CustomerName == "" || req.Phone == "" || req.ReserveDate == "" || req.ReserveTime == "" || req.GuestsCount <= 0 {
 		return nil, fmt.Errorf("все поля бронирования обязательны")
 	}
-
 	if err := validatePhone(req.Phone); err != nil {
 		return nil, err
 	}
@@ -353,9 +357,7 @@ func (s *ReservationServiceImpl) CreateReservation(ctx context.Context, userID *
 		GuestsCount:  req.GuestsCount,
 		Comment:      req.Comment,
 	}
-
-	err = s.reservationRepo.Create(ctx, res)
-	if err != nil {
+	if err := s.reservationRepo.Create(ctx, res); err != nil {
 		return nil, err
 	}
 
@@ -370,6 +372,8 @@ func (s *ReservationServiceImpl) GetReservationsByUserID(ctx context.Context, us
 	}
 	return mappers.ToReservationResponseList(reservations), nil
 }
+
+// BlogServiceImpl
 
 type BlogServiceImpl struct {
 	blogRepo repositories.BlogPostRepository
@@ -395,11 +399,15 @@ func (s *BlogServiceImpl) GetPostByID(ctx context.Context, id int) (dto.BlogPost
 	return mappers.ToBlogPostResponse(p), nil
 }
 
+// AdminServiceImpl
+
 type AdminServiceImpl struct {
 	orderRepo   repositories.OrderRepository
 	resRepo     repositories.ReservationRepository
 	productRepo repositories.ProductRepository
 	blogRepo    repositories.BlogPostRepository
+	userRepo    repositories.UserRepository
+	auditRepo   repositories.AuditLogRepository
 }
 
 func NewAdminService(
@@ -407,12 +415,16 @@ func NewAdminService(
 	resRepo repositories.ReservationRepository,
 	productRepo repositories.ProductRepository,
 	blogRepo repositories.BlogPostRepository,
+	userRepo repositories.UserRepository,
+	auditRepo repositories.AuditLogRepository,
 ) *AdminServiceImpl {
 	return &AdminServiceImpl{
 		orderRepo:   orderRepo,
 		resRepo:     resRepo,
 		productRepo: productRepo,
 		blogRepo:    blogRepo,
+		userRepo:    userRepo,
+		auditRepo:   auditRepo,
 	}
 }
 
@@ -421,7 +433,6 @@ func (s *AdminServiceImpl) GetOrders(ctx context.Context) ([]dto.OrderResponse, 
 	if err != nil {
 		return nil, err
 	}
-
 	var res []dto.OrderResponse
 	for i := range orders {
 		items, err := s.orderRepo.GetOrderItems(ctx, orders[i].ID)
@@ -455,60 +466,26 @@ func (s *AdminServiceImpl) UpdateReservationStatus(ctx context.Context, id int, 
 	return s.resRepo.UpdateStatusByID(ctx, id, status)
 }
 
-func (s *AdminServiceImpl) CreateCategory(ctx context.Context, req dto.CategoryResponse) (dto.CategoryResponse, error) {
-	if req.Name == "" || req.Slug == "" {
-		return dto.CategoryResponse{}, fmt.Errorf("название категории и слаг обязательны")
-	}
-	c := &models.Category{
-		Name: req.Name,
-		Slug: req.Slug,
-	}
-	err := s.productRepo.CreateCategory(ctx, c)
+func (s *AdminServiceImpl) GetAdminProducts(ctx context.Context, categoryID *int) ([]dto.ProductResponse, error) {
+	products, err := s.productRepo.GetProducts(ctx, categoryID, true)
 	if err != nil {
-		return dto.CategoryResponse{}, err
+		return nil, err
 	}
-	return mappers.ToCategoryResponse(c), nil
+	return mappers.ToProductResponseList(products), nil
 }
 
-func (s *AdminServiceImpl) UpdateCategory(ctx context.Context, id int, req dto.CategoryResponse) (dto.CategoryResponse, error) {
-	if req.Name == "" || req.Slug == "" {
-		return dto.CategoryResponse{}, fmt.Errorf("название категории и слаг обязательны")
-	}
-	c := &models.Category{
-		ID:   id,
-		Name: req.Name,
-		Slug: req.Slug,
-	}
-	err := s.productRepo.UpdateCategory(ctx, c)
+func (s *AdminServiceImpl) GetAdminProductByID(ctx context.Context, id int) (dto.ProductResponse, error) {
+	p, err := s.productRepo.GetProductByID(ctx, id)
 	if err != nil {
-		return dto.CategoryResponse{}, err
+		return dto.ProductResponse{}, err
 	}
-	return mappers.ToCategoryResponse(c), nil
-}
-
-func (s *AdminServiceImpl) DeleteCategory(ctx context.Context, id int) error {
-	// Сначала получаем все продукты этой категории
-	products, err := s.productRepo.GetProducts(ctx, &id)
-	if err == nil {
-		for _, p := range products {
-			// Удаляем картинку
-			if p.ImageURL != "" && strings.HasPrefix(p.ImageURL, "/uploads/") {
-				workDir, _ := os.Getwd()
-				oldFilePath := filepath.Join(workDir, "uploads", strings.TrimPrefix(p.ImageURL, "/uploads/"))
-				os.Remove(oldFilePath)
-			}
-			// Удаляем продукт
-			s.productRepo.Delete(ctx, p.ID)
-		}
-	}
-	return s.productRepo.DeleteCategory(ctx, id)
+	return mappers.ToProductResponse(p), nil
 }
 
 func (s *AdminServiceImpl) CreateProduct(ctx context.Context, req dto.ProductResponse) (dto.ProductResponse, error) {
 	if req.Name == "" || req.Price <= 0 {
 		return dto.ProductResponse{}, fmt.Errorf("название товара и цена обязательны")
 	}
-
 	p := &models.Product{
 		Name:        req.Name,
 		Description: req.Description,
@@ -519,12 +496,9 @@ func (s *AdminServiceImpl) CreateProduct(ctx context.Context, req dto.ProductRes
 		Calories:    req.Calories,
 		IsAvailable: req.IsAvailable,
 	}
-
-	err := s.productRepo.Create(ctx, p)
-	if err != nil {
+	if err := s.productRepo.Create(ctx, p); err != nil {
 		return dto.ProductResponse{}, err
 	}
-
 	return mappers.ToProductResponse(p), nil
 }
 
@@ -532,7 +506,6 @@ func (s *AdminServiceImpl) UpdateProduct(ctx context.Context, id int, req dto.Pr
 	if req.Name == "" || req.Price <= 0 {
 		return dto.ProductResponse{}, fmt.Errorf("название товара и цена обязательны")
 	}
-
 	p := &models.Product{
 		ID:          id,
 		Name:        req.Name,
@@ -542,18 +515,62 @@ func (s *AdminServiceImpl) UpdateProduct(ctx context.Context, id int, req dto.Pr
 		ImageURL:    req.ImageURL,
 		Weight:      req.Weight,
 		Calories:    req.Calories,
+		IsAvailable: req.IsAvailable,
 	}
-
-	err := s.productRepo.Update(ctx, p)
-	if err != nil {
+	if err := s.productRepo.Update(ctx, p); err != nil {
 		return dto.ProductResponse{}, err
 	}
-
 	return mappers.ToProductResponse(p), nil
 }
 
-func (s *AdminServiceImpl) DeleteProduct(ctx context.Context, id int) error {
-	return s.productRepo.Delete(ctx, id)
+func (s *AdminServiceImpl) DeleteProduct(ctx context.Context, id int) (bool, error) {
+	hasOrders, err := s.productRepo.HasOrderHistory(ctx, id)
+	if err != nil {
+		return false, err
+	}
+	if hasOrders {
+		if err := s.productRepo.SoftDelete(ctx, id); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+	if err := s.productRepo.Delete(ctx, id); err != nil {
+		return false, err
+	}
+	return false, nil
+}
+
+func (s *AdminServiceImpl) CreateCategory(ctx context.Context, req dto.CategoryResponse) (dto.CategoryResponse, error) {
+	if req.Name == "" || req.Slug == "" {
+		return dto.CategoryResponse{}, fmt.Errorf("название категории и слаг обязательны")
+	}
+	c := &models.Category{Name: req.Name, Slug: req.Slug}
+	if err := s.productRepo.CreateCategory(ctx, c); err != nil {
+		return dto.CategoryResponse{}, err
+	}
+	return mappers.ToCategoryResponse(c), nil
+}
+
+func (s *AdminServiceImpl) UpdateCategory(ctx context.Context, id int, req dto.CategoryResponse) (dto.CategoryResponse, error) {
+	if req.Name == "" || req.Slug == "" {
+		return dto.CategoryResponse{}, fmt.Errorf("название категории и слаг обязательны")
+	}
+	c := &models.Category{ID: id, Name: req.Name, Slug: req.Slug}
+	if err := s.productRepo.UpdateCategory(ctx, c); err != nil {
+		return dto.CategoryResponse{}, err
+	}
+	return mappers.ToCategoryResponse(c), nil
+}
+
+func (s *AdminServiceImpl) DeleteCategory(ctx context.Context, id int) error {
+	hasProducts, err := s.productRepo.HasProductsInCategory(ctx, id)
+	if err != nil {
+		return err
+	}
+	if hasProducts {
+		return fmt.Errorf("невозможно удалить категорию: сначала удалите или перенесите все блюда из этой категории")
+	}
+	return s.productRepo.DeleteCategory(ctx, id)
 }
 
 func (s *AdminServiceImpl) GetAllBlogPosts(ctx context.Context) ([]dto.BlogPostResponse, error) {
@@ -612,27 +629,24 @@ func (s *AdminServiceImpl) GetStats(ctx context.Context, startDate, endDate stri
 	if err != nil {
 		return nil, err
 	}
-
 	reservations, err := s.resRepo.GetAll(ctx)
 	if err != nil {
 		return nil, err
 	}
-
-	products, err := s.productRepo.GetProducts(ctx, nil)
+	products, err := s.productRepo.GetProducts(ctx, nil, false)
 	if err != nil {
 		return nil, err
 	}
 
 	var totalRevenue float64
-	var filteredOrders int
-	var filteredReservations int
+	var filteredOrders, filteredReservations int
 
 	var start, end time.Time
 	hasDates := startDate != "" && endDate != ""
 	if hasDates {
 		start, _ = time.Parse("2006-01-02", startDate)
 		end, _ = time.Parse("2006-01-02", endDate)
-		end = end.Add(24*time.Hour - time.Second) // До конца дня
+		end = end.Add(24*time.Hour - time.Second)
 	}
 
 	for _, o := range orders {
@@ -644,7 +658,6 @@ func (s *AdminServiceImpl) GetStats(ctx context.Context, startDate, endDate stri
 			totalRevenue += o.TotalPrice
 		}
 	}
-
 	for _, r := range reservations {
 		if hasDates && (r.ReserveDate.Before(start) || r.ReserveDate.After(end)) {
 			continue
@@ -652,12 +665,103 @@ func (s *AdminServiceImpl) GetStats(ctx context.Context, startDate, endDate stri
 		filteredReservations++
 	}
 
-	stats := map[string]interface{}{
+	return map[string]interface{}{
 		"total_orders":       filteredOrders,
 		"total_reservations": filteredReservations,
 		"total_products":     len(products),
 		"total_revenue":      totalRevenue,
+	}, nil
+}
+
+func (s *AdminServiceImpl) GetUsers(ctx context.Context) ([]dto.AdminUserResponse, error) {
+	users, err := s.userRepo.GetAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var res []dto.AdminUserResponse
+	for _, u := range users {
+		res = append(res, dto.AdminUserResponse{
+			ID:             u.ID,
+			Name:           u.Name,
+			Phone:          u.Phone,
+			Email:          u.Email,
+			DefaultAddress: u.DefaultAddress,
+			Role:           u.Role,
+		})
+	}
+	return res, nil
+}
+
+func (s *AdminServiceImpl) UpdateUserRole(ctx context.Context, targetUserID, currentAdminID int, newRole string) error {
+	validRoles := map[string]bool{"user": true, "admin": true, "super_admin": true}
+	if !validRoles[newRole] {
+		return fmt.Errorf("недопустимая роль: %s", newRole)
+	}
+	if targetUserID == currentAdminID {
+		return fmt.Errorf("нельзя изменить собственную роль")
 	}
 
-	return stats, nil
+	targetUser, err := s.userRepo.GetByID(ctx, targetUserID)
+	if err != nil {
+		return fmt.Errorf("пользователь не найден")
+	}
+
+	if targetUser.Role == "super_admin" && newRole != "super_admin" {
+		count, err := s.userRepo.CountByRole(ctx, "super_admin")
+		if err != nil {
+			return err
+		}
+		if count <= 1 {
+			return fmt.Errorf("нельзя понизить роль последнего суперадминистратора")
+		}
+	}
+
+	return s.userRepo.UpdateRole(ctx, targetUserID, newRole)
+}
+
+func (s *AdminServiceImpl) DeleteUser(ctx context.Context, targetUserID, currentAdminID int) error {
+	if targetUserID == currentAdminID {
+		return fmt.Errorf("нельзя удалить собственный аккаунт")
+	}
+
+	targetUser, err := s.userRepo.GetByID(ctx, targetUserID)
+	if err != nil {
+		return fmt.Errorf("пользователь не найден")
+	}
+
+	if targetUser.Role == "super_admin" {
+		count, err := s.userRepo.CountByRole(ctx, "super_admin")
+		if err != nil {
+			return err
+		}
+		if count <= 1 {
+			return fmt.Errorf("нельзя удалить последнего суперадминистратора")
+		}
+	}
+
+	return s.userRepo.Delete(ctx, targetUserID)
+}
+
+func (s *AdminServiceImpl) GetAuditLog(ctx context.Context) ([]dto.AuditLogResponse, error) {
+	logs, err := s.auditRepo.GetAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var res []dto.AuditLogResponse
+	for _, l := range logs {
+		res = append(res, dto.AuditLogResponse{
+			ID:         l.ID,
+			AdminID:    l.AdminID,
+			Action:     l.Action,
+			EntityType: l.EntityType,
+			EntityID:   l.EntityID,
+			Details:    l.Details,
+			CreatedAt:  l.CreatedAt,
+		})
+	}
+	return res, nil
+}
+
+func (s *AdminServiceImpl) LogAudit(ctx context.Context, adminID *int, action, entityType string, entityID *int, details string) error {
+	return s.auditRepo.Log(ctx, adminID, action, entityType, entityID, details)
 }
