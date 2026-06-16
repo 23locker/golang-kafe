@@ -61,6 +61,7 @@ type BlogService interface {
 type AdminService interface {
 	// Orders & reservations
 	GetOrders(ctx context.Context) ([]dto.OrderResponse, error)
+	GetOrdersFiltered(ctx context.Context, phone string, orderID *int) ([]dto.OrderResponse, error)
 	UpdateOrderStatus(ctx context.Context, orderID int, status string) error
 	GetReservations(ctx context.Context) ([]dto.ReservationResponse, error)
 	UpdateReservationStatus(ctx context.Context, id int, status string) error
@@ -444,6 +445,22 @@ func (s *AdminServiceImpl) GetOrders(ctx context.Context) ([]dto.OrderResponse, 
 	return res, nil
 }
 
+func (s *AdminServiceImpl) GetOrdersFiltered(ctx context.Context, phone string, orderID *int) ([]dto.OrderResponse, error) {
+	orders, err := s.orderRepo.GetFiltered(ctx, phone, orderID)
+	if err != nil {
+		return nil, err
+	}
+	var res []dto.OrderResponse
+	for i := range orders {
+		items, err := s.orderRepo.GetOrderItems(ctx, orders[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, mappers.ToOrderResponse(&orders[i], items))
+	}
+	return res, nil
+}
+
 func (s *AdminServiceImpl) UpdateOrderStatus(ctx context.Context, orderID int, status string) error {
 	if status == "" {
 		return fmt.Errorf("статус не может быть пустым")
@@ -687,6 +704,7 @@ func (s *AdminServiceImpl) GetUsers(ctx context.Context) ([]dto.AdminUserRespons
 			Email:          u.Email,
 			DefaultAddress: u.DefaultAddress,
 			Role:           u.Role,
+			CreatedAt:      u.CreatedAt,
 		})
 	}
 	return res, nil

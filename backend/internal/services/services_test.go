@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -277,6 +278,20 @@ func (m *MockOrderRepository) UpdatePaymentStatus(ctx context.Context, paymentID
 func (m *MockOrderRepository) GetAll(ctx context.Context) ([]models.Order, error) {
 	var list []models.Order
 	for _, o := range m.Orders {
+		list = append(list, *o)
+	}
+	return list, nil
+}
+
+func (m *MockOrderRepository) GetFiltered(ctx context.Context, phone string, orderID *int) ([]models.Order, error) {
+	var list []models.Order
+	for _, o := range m.Orders {
+		if phone != "" && !strings.Contains(o.Phone, phone) {
+			continue
+		}
+		if orderID != nil && o.ID != *orderID {
+			continue
+		}
 		list = append(list, *o)
 	}
 	return list, nil

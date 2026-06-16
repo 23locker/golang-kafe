@@ -88,7 +88,7 @@
         "home",
     );
     let adminTab = $state<
-        "stats" | "orders" | "reservations" | "menu" | "categories" | "blog"
+        "stats" | "orders" | "reservations" | "menu" | "categories" | "blog" | "users" | "audit-log"
     >("stats");
 
     // Booking date boundaries
@@ -224,6 +224,32 @@
     } | null>(null);
     let statsStartDate = $state("");
     let statsEndDate = $state("");
+
+    interface AdminUser {
+        id: number;
+        name: string;
+        phone: string;
+        email: string | null;
+        default_address: string | null;
+        role: string;
+        created_at: string;
+    }
+
+    interface AuditLogEntry {
+        id: number;
+        admin_id: number | null;
+        action: string;
+        entity_type: string;
+        entity_id: number | null;
+        details: string;
+        created_at: string;
+    }
+
+    let adminUsers = $state<AdminUser[]>([]);
+    let userSearchPhone = $state("");
+    let auditLog = $state<AuditLogEntry[]>([]);
+    let orderSearchPhone = $state("");
+    let orderSearchId = $state("");
 
     // Admin Product Form states
     let isProdFormOpen = $state(false);
@@ -439,10 +465,81 @@
                     adminStats = await statRes.json();
                 }
             }
+            // Both admin and super_admin can read users list
+            const usersRes = await fetch("/api/admin/users");
+            if (usersRes.ok) {
+                adminUsers = await usersRes.json();
+            }
         } catch (e) {
             console.error(e);
         }
     }
+
+    async function fetchAdminOrders() {
+        try {
+            const params = new URLSearchParams();
+            if (orderSearchPhone.trim()) params.set("phone", orderSearchPhone.trim());
+            if (orderSearchId.trim()) params.set("order_id", orderSearchId.trim());
+            const url = "/api/admin/orders" + (params.toString() ? "?" + params.toString() : "");
+            const res = await fetch(url);
+            if (res.ok) {
+                adminOrders = await res.json();
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    async function fetchAuditLog() {
+        try {
+            const res = await fetch("/api/admin/audit-log");
+            if (res.ok) {
+                auditLog = await res.json();
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    async function handleUpdateUserRole(userId: number, newRole: string) {
+        try {
+            const res = await fetch(`/api/admin/users/${userId}/role`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ role: newRole }),
+            });
+            if (res.ok) {
+                const usersRes = await fetch("/api/admin/users");
+                if (usersRes.ok) adminUsers = await usersRes.json();
+            } else {
+                const err = await res.text();
+                alert("Ошибка: " + err);
+            }
+        } catch (e) {
+            alert("Ошибка соединения");
+        }
+    }
+
+    async function handleDeleteUser(userId: number) {
+        if (!confirm("Вы уверены, что хотите удалить этого пользователя?")) return;
+        try {
+            const res = await fetch(`/api/admin/users/${userId}`, { method: "DELETE" });
+            if (res.ok) {
+                adminUsers = adminUsers.filter((u) => u.id !== userId);
+            } else {
+                const err = await res.text();
+                alert("Ошибка: " + err);
+            }
+        } catch (e) {
+            alert("Ошибка соединения");
+        }
+    }
+
+    let filteredAdminUsers = $derived(
+        userSearchPhone.trim()
+            ? adminUsers.filter((u) => u.phone.includes(userSearchPhone.trim()))
+            : adminUsers
+    );
 
     onMount(async () => {
         isMounted = true;
@@ -2875,6 +2972,30 @@
                         <span>Блог ({adminBlogPosts.length})</span>
                     </button>
                 {/if}
+
+                <button
+                    onclick={() => (adminTab = "users")}
+                    class="w-full text-left px-6 py-4 text-[11px] font-mono uppercase tracking-widest border transition-all cursor-pointer flex items-center gap-4 {adminTab ===
+                    'users'
+                        ? 'bg-white text-black border-white'
+                        : 'bg-transparent text-white/60 hover:text-white border-white/5 hover:border-white/20'}"
+                >
+                    <User class="w-4 h-4" />
+                    <span>Пользователи ({adminUsers.length})</span>
+                </button>
+
+                {#if currentUser?.role === "super_admin"}
+                    <button
+                        onclick={() => { adminTab = "audit-log"; fetchAuditLog(); }}
+                        class="w-full text-left px-6 py-4 text-[11px] font-mono uppercase tracking-widest border transition-all cursor-pointer flex items-center gap-4 {adminTab ===
+                        'audit-log'
+                            ? 'bg-white text-black border-white'
+                            : 'bg-transparent text-white/60 hover:text-white border-white/5 hover:border-white/20'}"
+                    >
+                        <TrendingUp class="w-4 h-4" />
+                        <span>Журнал аудита</span>
+                    </button>
+                {/if}
             </aside>
 
             <!-- Admin Main Area -->
@@ -2999,6 +3120,36 @@
                                 >заказов</span
                             >
                         </h2>
+
+                        <!-- Server-side search by phone / order ID -->
+                        <div class="flex flex-wrap items-end gap-4 border-b border-white/10 pb-6">
+                            <div class="space-y-1">
+                                <label class="text-[9px] uppercase tracking-widest text-white/40 block font-mono">Поиск по телефону</label>
+                                <input
+                                    type="text"
+                                    bind:value={orderSearchPhone}
+                                    placeholder="+7..."
+                                    class="bg-white/5 border border-white/10 px-4 py-2 text-xs text-white focus:outline-none focus:border-brand-red rounded-sm font-mono w-44"
+                                />
+                            </div>
+                            <div class="space-y-1">
+                                <label class="text-[9px] uppercase tracking-widest text-white/40 block font-mono">Номер заказа (ID)</label>
+                                <input
+                                    type="number"
+                                    bind:value={orderSearchId}
+                                    placeholder="ID"
+                                    class="bg-white/5 border border-white/10 px-4 py-2 text-xs text-white focus:outline-none focus:border-brand-red rounded-sm font-mono w-28"
+                                />
+                            </div>
+                            <button
+                                onclick={fetchAdminOrders}
+                                class="px-6 py-2 bg-white text-black text-[10px] font-bold uppercase tracking-widest hover:bg-brand-red hover:text-white transition-colors cursor-pointer rounded-sm"
+                            >Найти</button>
+                            <button
+                                onclick={() => { orderSearchPhone = ""; orderSearchId = ""; fetchAdminOrders(); }}
+                                class="px-4 py-2 border border-white/10 text-[10px] font-mono uppercase text-white/60 hover:text-white hover:border-white transition-colors cursor-pointer rounded-sm"
+                            >Сбросить</button>
+                        </div>
 
                         <!-- Filter & Sort controls -->
                         <div
@@ -3967,6 +4118,147 @@
                                                         </button>
                                                     </div>
                                                 </td>
+                                            </tr>
+                                        {/each}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {/if}
+                    </div>
+                {/if}
+                {#if adminTab === "users"}
+                    <div class="space-y-8">
+                        <h2 class="text-3xl font-display font-light uppercase tracking-tight text-white">
+                            Пользователи <span class="font-serif italic text-white/40 lowercase">системы</span>
+                        </h2>
+
+                        <!-- Search -->
+                        <div class="flex items-end gap-4 border-b border-white/10 pb-6">
+                            <div class="space-y-1">
+                                <label class="text-[9px] uppercase tracking-widest text-white/40 block font-mono">Поиск по телефону</label>
+                                <input
+                                    type="text"
+                                    bind:value={userSearchPhone}
+                                    placeholder="+7..."
+                                    class="bg-white/5 border border-white/10 px-4 py-2 text-xs text-white focus:outline-none focus:border-brand-red rounded-sm font-mono w-52"
+                                />
+                            </div>
+                            {#if userSearchPhone}
+                                <button
+                                    onclick={() => (userSearchPhone = "")}
+                                    class="px-4 py-2 border border-white/10 text-[10px] font-mono uppercase text-white/60 hover:text-white hover:border-white transition-colors cursor-pointer rounded-sm"
+                                >Сбросить</button>
+                            {/if}
+                        </div>
+
+                        {#if filteredAdminUsers.length === 0}
+                            <p class="text-sm font-mono text-white/30 italic">Пользователи не найдены</p>
+                        {:else}
+                            <div class="overflow-x-auto border border-white/10">
+                                <table class="w-full text-left border-collapse text-xs font-light">
+                                    <thead>
+                                        <tr class="border-b border-white/10 bg-white/[0.02] text-[9px] uppercase tracking-widest font-mono text-white/40">
+                                            <th class="p-4">ID</th>
+                                            <th class="p-4">Имя</th>
+                                            <th class="p-4">Телефон</th>
+                                            <th class="p-4">Email</th>
+                                            <th class="p-4">Адрес</th>
+                                            <th class="p-4">Роль</th>
+                                            <th class="p-4">Дата регистрации</th>
+                                            {#if currentUser?.role === "super_admin"}
+                                                <th class="p-4 text-right">Действия</th>
+                                            {/if}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {#each filteredAdminUsers as u}
+                                            <tr class="border-b border-white/5 hover:bg-white/[0.01] transition-colors">
+                                                <td class="p-4 font-mono text-white/40">{u.id}</td>
+                                                <td class="p-4 font-bold text-white">{u.name}</td>
+                                                <td class="p-4 text-white/80 font-mono">{u.phone}</td>
+                                                <td class="p-4 text-white/50">{u.email ?? "—"}</td>
+                                                <td class="p-4 text-white/50">{u.default_address ?? "—"}</td>
+                                                <td class="p-4">
+                                                    <span class="px-2 py-1 text-[9px] font-mono uppercase tracking-widest rounded-sm {u.role === 'super_admin' ? 'bg-brand-red text-white' : u.role === 'admin' ? 'bg-white/20 text-white' : 'bg-white/5 text-white/50'}">
+                                                        {u.role}
+                                                    </span>
+                                                </td>
+                                                <td class="p-4 font-mono text-white/40 text-[10px]">{new Date(u.created_at).toLocaleDateString("ru-RU")}</td>
+                                                {#if currentUser?.role === "super_admin"}
+                                                    <td class="p-4 text-right">
+                                                        <div class="flex items-center justify-end gap-2">
+                                                            {#if u.id !== currentUser?.id}
+                                                                <select
+                                                                    value={u.role}
+                                                                    onchange={(e) => handleUpdateUserRole(u.id, (e.target as HTMLSelectElement).value)}
+                                                                    class="bg-brand-gray border border-white/10 px-2 py-1 text-[10px] text-white focus:outline-none focus:border-brand-red rounded-sm cursor-pointer"
+                                                                >
+                                                                    <option value="user" class="text-black bg-white">user</option>
+                                                                    <option value="admin" class="text-black bg-white">admin</option>
+                                                                    <option value="super_admin" class="text-black bg-white">super_admin</option>
+                                                                </select>
+                                                                <button
+                                                                    onclick={() => handleDeleteUser(u.id)}
+                                                                    class="p-2 border border-white/10 hover:bg-brand-red hover:border-brand-red hover:text-white text-brand-red transition-all cursor-pointer"
+                                                                    title="Удалить пользователя"
+                                                                >
+                                                                    <Trash2 class="w-3 h-3" />
+                                                                </button>
+                                                            {:else}
+                                                                <span class="text-[9px] font-mono text-white/30">вы</span>
+                                                            {/if}
+                                                        </div>
+                                                    </td>
+                                                {/if}
+                                            </tr>
+                                        {/each}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {/if}
+                    </div>
+                {/if}
+
+                {#if adminTab === "audit-log"}
+                    <div class="space-y-8">
+                        <div class="flex items-center justify-between">
+                            <h2 class="text-3xl font-display font-light uppercase tracking-tight text-white">
+                                Журнал <span class="font-serif italic text-white/40 lowercase">аудита</span>
+                            </h2>
+                            <button
+                                onclick={fetchAuditLog}
+                                class="px-4 py-2 border border-white/10 text-[10px] font-mono uppercase text-white/60 hover:text-white hover:border-white transition-colors cursor-pointer"
+                            >Обновить</button>
+                        </div>
+
+                        {#if auditLog.length === 0}
+                            <p class="text-sm font-mono text-white/30 italic">Записей в журнале пока нет</p>
+                        {:else}
+                            <div class="overflow-x-auto border border-white/10">
+                                <table class="w-full text-left border-collapse text-xs font-light">
+                                    <thead>
+                                        <tr class="border-b border-white/10 bg-white/[0.02] text-[9px] uppercase tracking-widest font-mono text-white/40">
+                                            <th class="p-4">ID</th>
+                                            <th class="p-4">Время</th>
+                                            <th class="p-4">Действие</th>
+                                            <th class="p-4">Тип</th>
+                                            <th class="p-4">ID объекта</th>
+                                            <th class="p-4">Детали</th>
+                                            <th class="p-4">Администратор</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {#each auditLog as entry}
+                                            <tr class="border-b border-white/5 hover:bg-white/[0.01] transition-colors">
+                                                <td class="p-4 font-mono text-white/30">{entry.id}</td>
+                                                <td class="p-4 font-mono text-white/50 text-[10px] whitespace-nowrap">{new Date(entry.created_at).toLocaleString("ru-RU")}</td>
+                                                <td class="p-4">
+                                                    <span class="px-2 py-1 text-[9px] font-mono uppercase tracking-widest bg-white/5 text-white/80 rounded-sm">{entry.action}</span>
+                                                </td>
+                                                <td class="p-4 font-mono text-white/50">{entry.entity_type || "—"}</td>
+                                                <td class="p-4 font-mono text-white/40">{entry.entity_id ?? "—"}</td>
+                                                <td class="p-4 text-white/60 max-w-xs truncate">{entry.details || "—"}</td>
+                                                <td class="p-4 font-mono text-white/40">{entry.admin_id ?? "—"}</td>
                                             </tr>
                                         {/each}
                                     </tbody>

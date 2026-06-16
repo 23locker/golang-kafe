@@ -98,7 +98,7 @@ func (h *Handler) InitRoutes() http.Handler {
 		})
 
 		r.Route("/admin", func(r chi.Router) {
-			// admin OR super_admin: orders, reservations, products, categories, blog, stats
+			// admin OR super_admin
 			r.Group(func(r chi.Router) {
 				r.Use(h.adminRequiredMiddleware)
 				r.Get("/orders", h.adminGetOrders)
@@ -117,12 +117,13 @@ func (h *Handler) InitRoutes() http.Handler {
 				r.Post("/blog", h.adminCreateBlogPost)
 				r.Put("/blog/{id}", h.adminUpdateBlogPost)
 				r.Delete("/blog/{id}", h.adminDeleteBlogPost)
+				// Read-only user list available to both admin and super_admin
+				r.Get("/users", h.adminGetUsers)
 			})
 
-			// super_admin only: user management and audit log
+			// super_admin only: role/user mutations and audit log
 			r.Group(func(r chi.Router) {
 				r.Use(h.superAdminRequiredMiddleware)
-				r.Get("/users", h.adminGetUsers)
 				r.Put("/users/{id}/role", h.adminUpdateUserRole)
 				r.Delete("/users/{id}", h.adminDeleteUser)
 				r.Get("/audit-log", h.adminGetAuditLog)
@@ -471,7 +472,21 @@ func (h *Handler) getMyReservations(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) adminGetOrders(w http.ResponseWriter, r *http.Request) {
-	resp, err := h.adminService.GetOrders(r.Context())
+	phone := strings.TrimSpace(r.URL.Query().Get("phone"))
+	var orderID *int
+	if s := r.URL.Query().Get("order_id"); s != "" {
+		if id, err := strconv.Atoi(s); err == nil {
+			orderID = &id
+		}
+	}
+
+	var resp []dto.OrderResponse
+	var err error
+	if phone != "" || orderID != nil {
+		resp, err = h.adminService.GetOrdersFiltered(r.Context(), phone, orderID)
+	} else {
+		resp, err = h.adminService.GetOrders(r.Context())
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -932,6 +947,12 @@ func (h *Handler) adminUpdateUserRole(w http.ResponseWriter, r *http.Request) {
 	currentAdminID, ok := r.Context().Value(userIDKey).(int)
 	if !ok {
 		http.Error(w, "ошибка: неавторизован", http.StatusUnauthorized)
+		return
+	}
+	callerRole, _ := r.Context().Value(userRoleKey).(string)
+	// ADMIN role cannot grant or set super_admin
+	if callerRole == "admin" && req.Role == "super_admin" {
+		http.Error(w, "доступ запрещен: нельзя назначить роль суперадминистратора", http.StatusForbidden)
 		return
 	}
 	if err := h.adminService.UpdateUserRole(r.Context(), targetID, currentAdminID, req.Role); err != nil {

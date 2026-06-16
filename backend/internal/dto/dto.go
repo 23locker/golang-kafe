@@ -24,12 +24,13 @@ type UserResponse struct {
 }
 
 type AdminUserResponse struct {
-	ID             int     `json:"id"`
-	Name           string  `json:"name"`
-	Phone          string  `json:"phone"`
-	Email          *string `json:"email"`
-	DefaultAddress *string `json:"default_address"`
-	Role           string  `json:"role"`
+	ID             int       `json:"id"`
+	Name           string    `json:"name"`
+	Phone          string    `json:"phone"`
+	Email          *string   `json:"email"`
+	DefaultAddress *string   `json:"default_address"`
+	Role           string    `json:"role"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 type UpdateRoleRequest struct {

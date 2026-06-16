@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"backend/internal/dto"
@@ -44,6 +45,7 @@ type OrderRepository interface {
 	GetOrderItems(ctx context.Context, orderID int) ([]dto.OrderItemResponse, error)
 	UpdatePaymentStatus(ctx context.Context, paymentID string, status string) error
 	GetAll(ctx context.Context) ([]models.Order, error)
+	GetFiltered(ctx context.Context, phone string, orderID *int) ([]models.Order, error)
 	UpdateStatusByID(ctx context.Context, orderID int, status string) error
 }
 
@@ -418,6 +420,44 @@ func (r *PostgresOrderRepository) GetOrderItems(ctx context.Context, orderID int
 			return nil, fmt.Errorf("ошибка сканирования позиции заказа: %w", err)
 		}
 		list = append(list, item)
+	}
+	return list, nil
+}
+
+func (r *PostgresOrderRepository) GetFiltered(ctx context.Context, phone string, orderID *int) ([]models.Order, error) {
+	args := []interface{}{}
+	where := []string{}
+	idx := 1
+
+	if phone != "" {
+		where = append(where, fmt.Sprintf("phone ILIKE $%d", idx))
+		args = append(args, "%"+phone+"%")
+		idx++
+	}
+	if orderID != nil {
+		where = append(where, fmt.Sprintf("id = $%d", idx))
+		args = append(args, *orderID)
+	}
+
+	query := `SELECT id, user_id, customer_name, phone, address, total_price, payment_status, payment_id, created_at FROM orders`
+	if len(where) > 0 {
+		query += " WHERE " + strings.Join(where, " AND ")
+	}
+	query += " ORDER BY created_at DESC"
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка фильтрации заказов: %w", err)
+	}
+	defer rows.Close()
+
+	var list []models.Order
+	for rows.Next() {
+		var o models.Order
+		if err := rows.Scan(&o.ID, &o.UserID, &o.CustomerName, &o.Phone, &o.Address, &o.TotalPrice, &o.PaymentStatus, &o.PaymentID, &o.CreatedAt); err != nil {
+			return nil, fmt.Errorf("ошибка сканирования заказа: %w", err)
+		}
+		list = append(list, o)
 	}
 	return list, nil
 }

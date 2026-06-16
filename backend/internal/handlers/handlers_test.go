@@ -139,6 +139,7 @@ func (m *MockBlogService) GetPostByID(ctx context.Context, id int) (dto.BlogPost
 
 type MockAdminService struct {
 	GetOrdersFunc               func(ctx context.Context) ([]dto.OrderResponse, error)
+	GetOrdersFilteredFunc       func(ctx context.Context, phone string, orderID *int) ([]dto.OrderResponse, error)
 	UpdateOrderStatusFunc       func(ctx context.Context, orderID int, status string) error
 	GetReservationsFunc         func(ctx context.Context) ([]dto.ReservationResponse, error)
 	UpdateReservationStatusFunc func(ctx context.Context, id int, status string) error
@@ -164,6 +165,13 @@ type MockAdminService struct {
 func (m *MockAdminService) GetOrders(ctx context.Context) ([]dto.OrderResponse, error) {
 	if m.GetOrdersFunc != nil {
 		return m.GetOrdersFunc(ctx)
+	}
+	return nil, nil
+}
+
+func (m *MockAdminService) GetOrdersFiltered(ctx context.Context, phone string, orderID *int) ([]dto.OrderResponse, error) {
+	if m.GetOrdersFilteredFunc != nil {
+		return m.GetOrdersFilteredFunc(ctx, phone, orderID)
 	}
 	return nil, nil
 }
