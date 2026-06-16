@@ -6,6 +6,8 @@ export interface Dish {
   image: string;
   category: 'main' | 'vegetables' | 'alcohol' | 'drinks';
   categoryName?: string;
+  calories?: number;
+  weight?: number;
 }
 
 export const MAIN_DISHES: Dish[] = [

@@ -257,8 +257,10 @@
     let auditLog = $state<AuditLogEntry[]>([]);
     let orderSearchPhone = $state("");
     let orderSearchId = $state("");
-    let sseConnected = $state(false);
-    let sseSource = $state<EventSource | null>(null);
+    let livePolling = $state(false);
+    let selectedDish = $state<Dish | null>(null);
+    // plain (non-reactive) ref — must not be proxied by Svelte
+    let _pollingInterval: ReturnType<typeof setInterval> | null = null;
 
     // Admin Product Form states
     let isProdFormOpen = $state(false);
@@ -301,6 +303,8 @@
                             image: p.image_url || "/images/placeholder.jpg",
                             category: (cat?.slug || "main") as any,
                             categoryName: cat?.name,
+                            calories: p.calories || undefined,
+                            weight: p.weight || undefined,
                         };
                     });
             }
@@ -564,30 +568,26 @@
         }
     }
 
-    function connectOrdersSSE() {
-        if (sseSource) {
-            sseSource.close();
-            sseSource = null;
-        }
-        const es = new EventSource("/api/admin/orders/sse");
-        es.onopen = () => { sseConnected = true; };
-        es.onmessage = (event: MessageEvent) => {
-            if (event.data === "connected") { sseConnected = true; return; }
-            fetchAdminOrders();
-        };
-        es.onerror = () => {
-            sseConnected = false;
-            es.close();
-            sseSource = null;
-            setTimeout(() => { if (currentView === "admin") connectOrdersSSE(); }, 5000);
-        };
-        sseSource = es;
+    function startOrdersPolling() {
+        if (_pollingInterval !== null) return;
+        livePolling = true;
+        _pollingInterval = setInterval(fetchAdminOrders, 5000);
     }
 
-    function disconnectOrdersSSE() {
-        sseSource?.close();
-        sseSource = null;
-        sseConnected = false;
+    function stopOrdersPolling() {
+        if (_pollingInterval !== null) {
+            clearInterval(_pollingInterval);
+            _pollingInterval = null;
+        }
+        livePolling = false;
+    }
+
+    function openDishModal(dish: Dish) {
+        selectedDish = dish;
+    }
+
+    function closeDishModal() {
+        selectedDish = null;
     }
 
     let filteredAdminUsers = $derived(
@@ -616,14 +616,14 @@
                 if (!isAdminRole(currentUser)) {
                     window.location.hash = "";
                     currentView = "home";
-                    disconnectOrdersSSE();
+                    stopOrdersPolling();
                     return;
                 }
                 currentView = "admin";
                 fetchAdminData();
-                connectOrdersSSE();
+                startOrdersPolling();
             } else {
-                if (currentView === "admin") disconnectOrdersSSE();
+                if (currentView === "admin") stopOrdersPolling();
                 if (window.location.hash === "#menu") {
                     currentView = "menu";
                 } else if (window.location.hash === "#blog") {
@@ -933,7 +933,7 @@
                 userOrders = [];
                 userReservations = [];
                 isProfileOpen = false;
-                disconnectOrdersSSE();
+                stopOrdersPolling();
                 if (currentView === "admin") {
                     currentView = "home";
                     window.location.hash = "";
@@ -2097,6 +2097,7 @@
                                     qty={getQuantity(item.id)}
                                     onAdd={() => addToCart(item.id)}
                                     onRemove={() => removeFromCart(item.id)}
+                                    onCardClick={() => openDishModal(item)}
                                 />
                             {/each}
                         </div>
@@ -2191,6 +2192,7 @@
                                         getQty={getQuantity}
                                         onAdd={addToCart}
                                         onRemove={removeFromCart}
+                                        onCardClick={(id) => openDishModal(dishes.find((d) => d.id === id)!)}
                                     />
                                 {/if}
                             {/each}
@@ -3192,13 +3194,11 @@
                             <h2 class="text-3xl font-display font-light uppercase tracking-tight text-white">
                                 Список <span class="font-serif italic text-white/40 lowercase">заказов</span>
                             </h2>
-                            {#if sseConnected}
+                            {#if livePolling}
                                 <span class="flex items-center gap-1.5 text-[9px] font-mono uppercase tracking-widest text-emerald-400 border border-emerald-400/20 bg-emerald-400/10 px-2 py-0.5">
                                     <span class="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span>
                                     Live
                                 </span>
-                            {:else}
-                                <span class="text-[9px] font-mono uppercase tracking-widest text-white/20 border border-white/5 px-2 py-0.5">Offline</span>
                             {/if}
                         </div>
 
@@ -4561,6 +4561,114 @@
                     </div>
                 {/if}
             </main>
+        </div>
+    {/if}
+
+    <!-- Dish Detail Modal -->
+    {#if selectedDish}
+        <div
+            transition:fade={{ duration: 150 }}
+            onclick={closeDishModal}
+            class="fixed inset-0 z-[70] bg-black/85 backdrop-blur-sm cursor-pointer"
+        ></div>
+        <div
+            transition:fade={{ duration: 150 }}
+            onclick={closeDishModal}
+            class="fixed inset-0 z-[71] flex items-center justify-center p-4 pointer-events-none"
+        >
+            <div
+                transition:scale={{ start: 0.96, duration: 200 }}
+                onclick={(e) => e.stopPropagation()}
+                class="bg-[#0c0c0c] border border-white/10 w-full max-w-lg max-h-[90vh] overflow-y-auto pointer-events-auto shadow-2xl"
+            >
+                <!-- Image -->
+                <div class="relative aspect-video overflow-hidden bg-[#080808]">
+                    <img
+                        src={selectedDish.image}
+                        alt={selectedDish.name}
+                        class="w-full h-full object-cover opacity-80"
+                    />
+                    <button
+                        onclick={closeDishModal}
+                        class="absolute top-4 right-4 p-2 bg-black/60 backdrop-blur-sm border border-white/10 text-white/60 hover:text-white hover:bg-black/80 transition-all cursor-pointer"
+                        aria-label="Закрыть"
+                    >
+                        <X class="w-4 h-4" />
+                    </button>
+                    {#if selectedDish.categoryName}
+                        <div class="absolute bottom-0 left-0 px-4 py-2 bg-gradient-to-t from-black/80 to-transparent">
+                            <span class="text-[9px] font-mono uppercase tracking-widest text-white/50">{selectedDish.categoryName}</span>
+                        </div>
+                    {/if}
+                </div>
+
+                <!-- Content -->
+                <div class="p-8 space-y-6">
+                    <h2 class="text-2xl font-display font-light uppercase tracking-tight text-white leading-tight">
+                        {selectedDish.name}
+                    </h2>
+
+                    {#if selectedDish.description}
+                        <p class="text-sm text-white/60 leading-relaxed font-light">
+                            {selectedDish.description}
+                        </p>
+                    {/if}
+
+                    <!-- Stats grid -->
+                    <div class="grid grid-cols-3 gap-4 py-5 border-t border-b border-white/5">
+                        <div>
+                            <p class="text-[9px] uppercase tracking-widest text-white/30 font-mono mb-1">Цена</p>
+                            <p class="text-xl font-mono tracking-tight text-white">{selectedDish.price} ₽</p>
+                        </div>
+                        {#if selectedDish.calories}
+                            <div>
+                                <p class="text-[9px] uppercase tracking-widest text-white/30 font-mono mb-1">Калории</p>
+                                <p class="text-xl font-mono tracking-tight text-white">{selectedDish.calories} <span class="text-xs text-white/40">ккал</span></p>
+                            </div>
+                        {/if}
+                        {#if selectedDish.weight}
+                            <div>
+                                <p class="text-[9px] uppercase tracking-widest text-white/30 font-mono mb-1">Вес</p>
+                                <p class="text-xl font-mono tracking-tight text-white">{selectedDish.weight} <span class="text-xs text-white/40">г</span></p>
+                            </div>
+                        {/if}
+                    </div>
+
+                    <!-- Cart action -->
+                    <div class="flex items-center gap-4">
+                        {#if getQuantity(selectedDish.id) > 0}
+                            <div class="flex items-center gap-5 bg-white/5 border border-white/10 px-6 py-3">
+                                <button
+                                    onclick={() => removeFromCart(selectedDish!.id)}
+                                    class="text-white/40 hover:text-white transition-colors cursor-pointer"
+                                >
+                                    <Minus class="w-4 h-4" />
+                                </button>
+                                <span class="font-mono text-sm text-white min-w-[1ch] text-center">{getQuantity(selectedDish.id)}</span>
+                                <button
+                                    onclick={() => addToCart(selectedDish!.id)}
+                                    class="text-brand-red hover:text-red-400 transition-colors cursor-pointer"
+                                >
+                                    <Plus class="w-4 h-4" />
+                                </button>
+                            </div>
+                            <button
+                                onclick={closeDishModal}
+                                class="flex-1 py-3 text-center text-[10px] font-bold uppercase tracking-[0.2em] bg-white text-black hover:bg-brand-red hover:text-white transition-colors cursor-pointer"
+                            >
+                                В корзину ({getQuantity(selectedDish.id)})
+                            </button>
+                        {:else}
+                            <button
+                                onclick={() => { addToCart(selectedDish!.id); }}
+                                class="flex-1 py-3 text-[10px] font-bold uppercase tracking-[0.2em] bg-white text-black hover:bg-brand-red hover:text-white transition-all cursor-pointer"
+                            >
+                                Добавить в корзину
+                            </button>
+                        {/if}
+                    </div>
+                </div>
+            </div>
         </div>
     {/if}
 </div>

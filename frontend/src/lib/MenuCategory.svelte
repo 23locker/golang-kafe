@@ -10,7 +10,8 @@
     toggleExpand,
     getQty,
     onAdd,
-    onRemove
+    onRemove,
+    onCardClick
   }: {
     title: string;
     subtitle: string;
@@ -20,6 +21,7 @@
     getQty: (id: string) => number;
     onAdd: (id: string) => void;
     onRemove: (id: string) => void;
+    onCardClick?: (id: string) => void;
   } = $props();
 </script>
 
@@ -32,11 +34,12 @@
 
   <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
     {#each dishes as item (item.id)}
-      <MenuCard 
-        {item} 
-        qty={getQty(item.id)} 
+      <MenuCard
+        {item}
+        qty={getQty(item.id)}
         onAdd={() => onAdd(item.id)}
         onRemove={() => onRemove(item.id)}
+        onCardClick={() => onCardClick?.(item.id)}
       />
     {/each}
   </div>
