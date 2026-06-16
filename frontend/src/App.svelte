@@ -88,7 +88,14 @@
         "home",
     );
     let adminTab = $state<
-        "stats" | "orders" | "reservations" | "menu" | "categories" | "blog" | "users" | "audit-log"
+        | "stats"
+        | "orders"
+        | "reservations"
+        | "menu"
+        | "categories"
+        | "blog"
+        | "users"
+        | "audit-log"
     >("stats");
 
     // Booking date boundaries
@@ -478,9 +485,13 @@
     async function fetchAdminOrders() {
         try {
             const params = new URLSearchParams();
-            if (orderSearchPhone.trim()) params.set("phone", orderSearchPhone.trim());
-            if (orderSearchId.trim()) params.set("order_id", orderSearchId.trim());
-            const url = "/api/admin/orders" + (params.toString() ? "?" + params.toString() : "");
+            if (orderSearchPhone.trim())
+                params.set("phone", orderSearchPhone.trim());
+            if (orderSearchId.trim())
+                params.set("order_id", orderSearchId.trim());
+            const url =
+                "/api/admin/orders" +
+                (params.toString() ? "?" + params.toString() : "");
             const res = await fetch(url);
             if (res.ok) {
                 adminOrders = await res.json();
@@ -521,9 +532,12 @@
     }
 
     async function handleDeleteUser(userId: number) {
-        if (!confirm("Вы уверены, что хотите удалить этого пользователя?")) return;
+        if (!confirm("Вы уверены, что хотите удалить этого пользователя?"))
+            return;
         try {
-            const res = await fetch(`/api/admin/users/${userId}`, { method: "DELETE" });
+            const res = await fetch(`/api/admin/users/${userId}`, {
+                method: "DELETE",
+            });
             if (res.ok) {
                 adminUsers = adminUsers.filter((u) => u.id !== userId);
             } else {
@@ -538,7 +552,7 @@
     let filteredAdminUsers = $derived(
         userSearchPhone.trim()
             ? adminUsers.filter((u) => u.phone.includes(userSearchPhone.trim()))
-            : adminUsers
+            : adminUsers,
     );
 
     onMount(async () => {
@@ -650,7 +664,9 @@
             return;
         }
         if (!isValidPhone(checkoutPhone)) {
-            alert("Неверный формат номера телефона. Используйте формат +7XXXXXXXXXX");
+            alert(
+                "Неверный формат номера телефона. Используйте формат +7XXXXXXXXXX",
+            );
             return;
         }
 
@@ -724,7 +740,9 @@
             return;
         }
         if (!isValidPhone(reservePhone)) {
-            alert("Неверный формат номера телефона. Используйте формат +7XXXXXXXXXX");
+            alert(
+                "Неверный формат номера телефона. Используйте формат +7XXXXXXXXXX",
+            );
             return;
         }
 
@@ -755,9 +773,18 @@
         const nowMoscowMs = Date.now() + moscowOffsetMs;
         const [rYear, rMonth, rDay] = reserveDate.split("-").map(Number);
         const [rHour, rMinute] = reserveTime.split(":").map(Number);
-        const reserveMoscowMs = Date.UTC(rYear, rMonth - 1, rDay, rHour, rMinute, 0);
+        const reserveMoscowMs = Date.UTC(
+            rYear,
+            rMonth - 1,
+            rDay,
+            rHour,
+            rMinute,
+            0,
+        );
         if (reserveMoscowMs <= nowMoscowMs) {
-            alert("Выбранное время уже прошло. Пожалуйста, выберите более позднее время (по московскому времени)");
+            alert(
+                "Выбранное время уже прошло. Пожалуйста, выберите более позднее время (по московскому времени)",
+            );
             return;
         }
 
@@ -811,7 +838,8 @@
             return;
         }
         if (!isValidPhone(authPhone)) {
-            authError = "Неверный формат номера телефона. Используйте формат +7XXXXXXXXXX";
+            authError =
+                "Неверный формат номера телефона. Используйте формат +7XXXXXXXXXX";
             return;
         }
         if (authMode === "register" && authPassword.length < 6) {
@@ -1224,7 +1252,9 @@
                     <div class="space-y-2">
                         <label
                             class="text-[9px] uppercase tracking-widest text-white/40 block font-mono"
-                            >Email <span class="text-white/20">(необязательно)</span></label
+                            >Email <span class="text-white/20"
+                                >(необязательно)</span
+                            ></label
                         >
                         <input
                             type="email"
@@ -1352,7 +1382,11 @@
                             </div>
                             {#if profileMessage}
                                 <p
-                                    class="text-[10px] font-mono {profileMessage.includes('Ошибка') ? 'text-brand-red' : 'text-emerald-400'} mt-2"
+                                    class="text-[10px] font-mono {profileMessage.includes(
+                                        'Ошибка',
+                                    )
+                                        ? 'text-brand-red'
+                                        : 'text-emerald-400'} mt-2"
                                 >
                                     {profileMessage}
                                 </p>
@@ -1389,7 +1423,9 @@
                                             >
                                             <span
                                                 class="text-brand-red uppercase"
-                                                >{localizeOrderStatus(order.payment_status)}</span
+                                                >{localizeOrderStatus(
+                                                    order.payment_status,
+                                                )}</span
                                             >
                                         </div>
                                         <div class="space-y-2">
@@ -1817,7 +1853,9 @@
                                 <a
                                     href="#admin"
                                     class="text-brand-red/60 hover:text-brand-red transition-colors"
-                                    >{currentUser?.role === "super_admin" ? "Админ-Панель" : "Управление"}</a
+                                    >{currentUser?.role === "super_admin"
+                                        ? "Админ-Панель"
+                                        : "Управление"}</a
                                 >
                             </li>
                         {/if}
@@ -2089,31 +2127,6 @@
                                 свежего мяса.
                             </p>
                         </div>
-
-                        <div class="flex flex-col items-end gap-6">
-                            <div
-                                class="inline-flex bg-white/5 p-1 border border-white/10 rounded-sm font-mono"
-                            >
-                                <button
-                                    onclick={() => (deliveryMode = "delivery")}
-                                    class="px-8 py-3 text-[10px] font-bold uppercase tracking-widest transition-all cursor-pointer {deliveryMode ===
-                                    'delivery'
-                                        ? 'bg-white text-black'
-                                        : 'text-white/40 hover:text-white'}"
-                                >
-                                    Доставка
-                                </button>
-                                <button
-                                    onclick={() => (deliveryMode = "bar")}
-                                    class="px-8 py-3 text-[10px] font-bold uppercase tracking-widest transition-all cursor-pointer {deliveryMode ===
-                                    'bar'
-                                        ? 'bg-white text-black'
-                                        : 'text-white/40 hover:text-white'}"
-                                >
-                                    В зале
-                                </button>
-                            </div>
-                        </div>
                     </div>
 
                     <div class="space-y-40">
@@ -2181,7 +2194,9 @@
             <!-- Blog Posts Grid -->
             <section class="py-20 px-6 md:px-12 lg:px-20 bg-[#030303]">
                 {#if blogPosts.length === 0}
-                    <p class="text-white/30 text-center font-mono text-sm py-20">
+                    <p
+                        class="text-white/30 text-center font-mono text-sm py-20"
+                    >
                         Статьи пока не опубликованы
                     </p>
                 {:else}
@@ -2195,7 +2210,8 @@
                                     class="relative w-full h-48 overflow-hidden bg-[#0a0a0a] mb-6"
                                 >
                                     <img
-                                        src={post.image_url || "/images/placeholder.jpg"}
+                                        src={post.image_url ||
+                                            "/images/placeholder.jpg"}
                                         alt={post.title}
                                         class="w-full h-full object-cover grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100 group-hover:scale-105 transition-all duration-1000 ease-out"
                                     />
@@ -2212,7 +2228,11 @@
                                     <div
                                         class="flex items-center gap-4 text-[10px] font-mono text-white/40"
                                     >
-                                        <span>{formatBlogDate(post.created_at)}</span>
+                                        <span
+                                            >{formatBlogDate(
+                                                post.created_at,
+                                            )}</span
+                                        >
                                         {#if post.read_time}
                                             <span>•</span>
                                             <span>{post.read_time}</span>
@@ -2271,9 +2291,9 @@
                     <p
                         class="max-w-xl mx-auto text-white/40 text-sm leading-relaxed font-light"
                     >
-                        «Байкал Буузы» — новое кафе, которое только открыло
-                        свои двери. Простое место для тех, кто хочет перекусить
-                        и отдохнуть.
+                        «Байкал Буузы» — новое кафе, которое только открыло свои
+                        двери. Простое место для тех, кто хочет перекусить и
+                        отдохнуть.
                     </p>
                 </div>
             </section>
@@ -2305,10 +2325,10 @@
                             <p
                                 class="text-white/50 text-sm leading-relaxed font-light"
                             >
-                                «Байкал Буузы» — небольшое кафе с понятным
-                                меню: кофе, закуски и блюда на каждый день.
-                                Подходит для обеда, короткого перерыва или
-                                неспешной встречи.
+                                «Байкал Буузы» — небольшое кафе с понятным меню:
+                                кофе, закуски и блюда на каждый день. Подходит
+                                для обеда, короткого перерыва или неспешной
+                                встречи.
                             </p>
                             <p
                                 class="text-white/50 text-sm leading-relaxed font-light"
@@ -2398,8 +2418,8 @@
                                     class="text-xs text-white/40 leading-relaxed font-light"
                                 >
                                     Спокойное пространство, где можно
-                                    расслабиться в одиночку или провести время
-                                    в компании.
+                                    расслабиться в одиночку или провести время в
+                                    компании.
                                 </p>
                             </div>
                         </div>
@@ -2795,7 +2815,8 @@
                         class="relative w-full h-[350px] overflow-hidden bg-black"
                     >
                         <img
-                            src={selectedBlogPost.image_url || "/images/placeholder.jpg"}
+                            src={selectedBlogPost.image_url ||
+                                "/images/placeholder.jpg"}
                             alt={selectedBlogPost.title}
                             class="w-full h-full object-cover opacity-50"
                         />
@@ -2827,10 +2848,16 @@
                         <div
                             class="flex items-center gap-6 text-[10px] font-mono text-white/40 border-b border-white/5 pb-4"
                         >
-                            <span>Опубликовано: {formatBlogDate(selectedBlogPost.created_at)}</span>
+                            <span
+                                >Опубликовано: {formatBlogDate(
+                                    selectedBlogPost.created_at,
+                                )}</span
+                            >
                             {#if selectedBlogPost.read_time}
                                 <span>•</span>
-                                <span>Время чтения: {selectedBlogPost.read_time}</span>
+                                <span
+                                    >Время чтения: {selectedBlogPost.read_time}</span
+                                >
                             {/if}
                         </div>
 
@@ -2876,7 +2903,8 @@
                         <button
                             onclick={() => {
                                 isProfileOpen = true;
-                                editAddress = currentUser?.default_address || "";
+                                editAddress =
+                                    currentUser?.default_address || "";
                                 editEmail = currentUser?.email || "";
                                 fetchUserHistory();
                             }}
@@ -2962,7 +2990,10 @@
                     </button>
 
                     <button
-                        onclick={() => { adminTab = "blog"; fetchAdminBlogPosts(); }}
+                        onclick={() => {
+                            adminTab = "blog";
+                            fetchAdminBlogPosts();
+                        }}
                         class="w-full text-left px-6 py-4 text-[11px] font-mono uppercase tracking-widest border transition-all cursor-pointer flex items-center gap-4 {adminTab ===
                         'blog'
                             ? 'bg-white text-black border-white'
@@ -2986,7 +3017,10 @@
 
                 {#if currentUser?.role === "super_admin"}
                     <button
-                        onclick={() => { adminTab = "audit-log"; fetchAuditLog(); }}
+                        onclick={() => {
+                            adminTab = "audit-log";
+                            fetchAuditLog();
+                        }}
                         class="w-full text-left px-6 py-4 text-[11px] font-mono uppercase tracking-widest border transition-all cursor-pointer flex items-center gap-4 {adminTab ===
                         'audit-log'
                             ? 'bg-white text-black border-white'
@@ -3122,9 +3156,14 @@
                         </h2>
 
                         <!-- Server-side search by phone / order ID -->
-                        <div class="flex flex-wrap items-end gap-4 border-b border-white/10 pb-6">
+                        <div
+                            class="flex flex-wrap items-end gap-4 border-b border-white/10 pb-6"
+                        >
                             <div class="space-y-1">
-                                <label class="text-[9px] uppercase tracking-widest text-white/40 block font-mono">Поиск по телефону</label>
+                                <label
+                                    class="text-[9px] uppercase tracking-widest text-white/40 block font-mono"
+                                    >Поиск по телефону</label
+                                >
                                 <input
                                     type="text"
                                     bind:value={orderSearchPhone}
@@ -3133,7 +3172,10 @@
                                 />
                             </div>
                             <div class="space-y-1">
-                                <label class="text-[9px] uppercase tracking-widest text-white/40 block font-mono">Номер заказа (ID)</label>
+                                <label
+                                    class="text-[9px] uppercase tracking-widest text-white/40 block font-mono"
+                                    >Номер заказа (ID)</label
+                                >
                                 <input
                                     type="number"
                                     bind:value={orderSearchId}
@@ -3144,11 +3186,17 @@
                             <button
                                 onclick={fetchAdminOrders}
                                 class="px-6 py-2 bg-white text-black text-[10px] font-bold uppercase tracking-widest hover:bg-brand-red hover:text-white transition-colors cursor-pointer rounded-sm"
-                            >Найти</button>
+                                >Найти</button
+                            >
                             <button
-                                onclick={() => { orderSearchPhone = ""; orderSearchId = ""; fetchAdminOrders(); }}
+                                onclick={() => {
+                                    orderSearchPhone = "";
+                                    orderSearchId = "";
+                                    fetchAdminOrders();
+                                }}
                                 class="px-4 py-2 border border-white/10 text-[10px] font-mono uppercase text-white/60 hover:text-white hover:border-white transition-colors cursor-pointer rounded-sm"
-                            >Сбросить</button>
+                                >Сбросить</button
+                            >
                         </div>
 
                         <!-- Filter & Sort controls -->
@@ -3826,21 +3874,29 @@
                                 transition:scale
                                 class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-2xl bg-[#0a0a0a] border border-white/10 p-10 rounded-sm shadow-2xl overflow-y-auto max-h-[90vh]"
                             >
-                                <div class="flex items-center justify-between mb-8">
+                                <div
+                                    class="flex items-center justify-between mb-8"
+                                >
                                     <h3
                                         class="text-xl font-display font-light uppercase tracking-tight text-white"
                                     >
-                                        {editingBlogId === null ? "Новая статья" : "Редактировать статью"}
+                                        {editingBlogId === null
+                                            ? "Новая статья"
+                                            : "Редактировать статью"}
                                     </h3>
                                     <button
                                         onclick={() => (isBlogFormOpen = false)}
                                         class="text-white/40 hover:text-white"
-                                    ><X class="w-5 h-5" /></button>
+                                        ><X class="w-5 h-5" /></button
+                                    >
                                 </div>
 
                                 <div class="space-y-4">
                                     <div class="space-y-1">
-                                        <label class="text-[9px] uppercase tracking-widest text-white/40 block font-mono">Заголовок</label>
+                                        <label
+                                            class="text-[9px] uppercase tracking-widest text-white/40 block font-mono"
+                                            >Заголовок</label
+                                        >
                                         <input
                                             type="text"
                                             bind:value={blogFormTitle}
@@ -3848,7 +3904,10 @@
                                         />
                                     </div>
                                     <div class="space-y-1">
-                                        <label class="text-[9px] uppercase tracking-widest text-white/40 block font-mono">Подзаголовок</label>
+                                        <label
+                                            class="text-[9px] uppercase tracking-widest text-white/40 block font-mono"
+                                            >Подзаголовок</label
+                                        >
                                         <input
                                             type="text"
                                             bind:value={blogFormSubtitle}
@@ -3856,7 +3915,10 @@
                                         />
                                     </div>
                                     <div class="space-y-1">
-                                        <label class="text-[9px] uppercase tracking-widest text-white/40 block font-mono">Содержание</label>
+                                        <label
+                                            class="text-[9px] uppercase tracking-widest text-white/40 block font-mono"
+                                            >Содержание</label
+                                        >
                                         <textarea
                                             bind:value={blogFormContent}
                                             rows="8"
@@ -3865,7 +3927,10 @@
                                     </div>
                                     <div class="grid grid-cols-2 gap-4">
                                         <div class="space-y-1">
-                                            <label class="text-[9px] uppercase tracking-widest text-white/40 block font-mono">Тег</label>
+                                            <label
+                                                class="text-[9px] uppercase tracking-widest text-white/40 block font-mono"
+                                                >Тег</label
+                                            >
                                             <input
                                                 type="text"
                                                 bind:value={blogFormTag}
@@ -3874,7 +3939,10 @@
                                             />
                                         </div>
                                         <div class="space-y-1">
-                                            <label class="text-[9px] uppercase tracking-widest text-white/40 block font-mono">Время чтения</label>
+                                            <label
+                                                class="text-[9px] uppercase tracking-widest text-white/40 block font-mono"
+                                                >Время чтения</label
+                                            >
                                             <input
                                                 type="text"
                                                 bind:value={blogFormReadTime}
@@ -3884,36 +3952,56 @@
                                         </div>
                                     </div>
                                     <div class="space-y-1">
-                                        <label class="text-[9px] uppercase tracking-widest text-white/40 block font-mono">Изображение</label>
+                                        <label
+                                            class="text-[9px] uppercase tracking-widest text-white/40 block font-mono"
+                                            >Изображение</label
+                                        >
                                         <input
                                             type="file"
                                             accept="image/*"
-                                            onchange={(e) => (blogFormImageFile = e.currentTarget.files?.[0] || null)}
+                                            onchange={(e) =>
+                                                (blogFormImageFile =
+                                                    e.currentTarget
+                                                        .files?.[0] || null)}
                                             class="w-full bg-white/5 border border-white/10 px-4 py-3 text-xs text-white focus:outline-none focus:border-brand-red rounded-sm font-mono"
                                         />
                                         {#if blogFormImage && !blogFormImageFile}
-                                            <p class="text-[10px] text-white/40 mt-1">Текущее: {blogFormImage}</p>
+                                            <p
+                                                class="text-[10px] text-white/40 mt-1"
+                                            >
+                                                Текущее: {blogFormImage}
+                                            </p>
                                         {/if}
                                     </div>
                                     <div class="space-y-1 mt-2">
-                                        <label class="flex items-center gap-2 cursor-pointer">
+                                        <label
+                                            class="flex items-center gap-2 cursor-pointer"
+                                        >
                                             <input
                                                 type="checkbox"
-                                                bind:checked={blogFormIsPublished}
+                                                bind:checked={
+                                                    blogFormIsPublished
+                                                }
                                                 class="w-4 h-4 accent-brand-red"
                                             />
-                                            <span class="text-[9px] uppercase tracking-widest text-white/80 font-mono">Опубликовано</span>
+                                            <span
+                                                class="text-[9px] uppercase tracking-widest text-white/80 font-mono"
+                                                >Опубликовано</span
+                                            >
                                         </label>
                                     </div>
                                     <div class="pt-4 flex gap-4">
                                         <button
-                                            onclick={() => (isBlogFormOpen = false)}
+                                            onclick={() =>
+                                                (isBlogFormOpen = false)}
                                             class="flex-1 bg-white/5 border border-white/10 hover:bg-white/10 text-white py-3 text-xs font-bold uppercase tracking-widest transition-colors cursor-pointer"
-                                        >Отмена</button>
+                                            >Отмена</button
+                                        >
                                         <button
                                             onclick={handleSaveBlogPost}
                                             class="flex-1 bg-white text-black hover:bg-brand-red hover:text-white py-3 text-xs font-bold uppercase tracking-widest transition-colors cursor-pointer"
-                                        >Сохранить</button>
+                                            >Сохранить</button
+                                        >
                                     </div>
                                 </div>
                             </div>
@@ -3921,37 +4009,73 @@
 
                         <!-- Blog Posts List -->
                         {#if adminBlogPosts.length === 0}
-                            <p class="text-sm font-mono text-white/30 italic">Статей пока нет</p>
+                            <p class="text-sm font-mono text-white/30 italic">
+                                Статей пока нет
+                            </p>
                         {:else}
                             <div class="space-y-4">
                                 {#each adminBlogPosts as post}
-                                    <div class="border border-white/10 bg-white/[0.01] p-6 rounded-sm flex items-start gap-6">
-                                        <div class="w-24 h-16 flex-shrink-0 bg-[#0a0a0a] border border-white/5 rounded-sm overflow-hidden">
+                                    <div
+                                        class="border border-white/10 bg-white/[0.01] p-6 rounded-sm flex items-start gap-6"
+                                    >
+                                        <div
+                                            class="w-24 h-16 flex-shrink-0 bg-[#0a0a0a] border border-white/5 rounded-sm overflow-hidden"
+                                        >
                                             <img
-                                                src={post.image_url || "/images/placeholder.jpg"}
+                                                src={post.image_url ||
+                                                    "/images/placeholder.jpg"}
                                                 alt={post.title}
                                                 class="w-full h-full object-cover"
                                             />
                                         </div>
                                         <div class="flex-1 min-w-0">
-                                            <div class="flex items-center gap-3 mb-1">
-                                                <h4 class="text-sm font-bold uppercase tracking-wider text-white truncate">{post.title}</h4>
+                                            <div
+                                                class="flex items-center gap-3 mb-1"
+                                            >
+                                                <h4
+                                                    class="text-sm font-bold uppercase tracking-wider text-white truncate"
+                                                >
+                                                    {post.title}
+                                                </h4>
                                                 {#if !post.is_published}
-                                                    <span class="text-[9px] font-mono uppercase px-2 py-0.5 bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 flex-shrink-0">Черновик</span>
+                                                    <span
+                                                        class="text-[9px] font-mono uppercase px-2 py-0.5 bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 flex-shrink-0"
+                                                        >Черновик</span
+                                                    >
                                                 {/if}
                                             </div>
-                                            <p class="text-[10px] text-white/40 font-mono mb-1">{formatBlogDate(post.created_at)}{post.tag ? ` · ${post.tag}` : ""}</p>
-                                            <p class="text-xs text-white/50 line-clamp-1">{post.subtitle}</p>
+                                            <p
+                                                class="text-[10px] text-white/40 font-mono mb-1"
+                                            >
+                                                {formatBlogDate(
+                                                    post.created_at,
+                                                )}{post.tag
+                                                    ? ` · ${post.tag}`
+                                                    : ""}
+                                            </p>
+                                            <p
+                                                class="text-xs text-white/50 line-clamp-1"
+                                            >
+                                                {post.subtitle}
+                                            </p>
                                         </div>
                                         <div class="flex gap-2 flex-shrink-0">
                                             <button
-                                                onclick={() => openEditBlogForm(post)}
+                                                onclick={() =>
+                                                    openEditBlogForm(post)}
                                                 class="px-4 py-2 border border-white/10 hover:border-white text-[10px] font-bold uppercase tracking-wider text-white transition-all cursor-pointer"
-                                            >Редактировать</button>
+                                                >Редактировать</button
+                                            >
                                             <button
-                                                onclick={() => handleDeleteBlogPost(post.id)}
+                                                onclick={() =>
+                                                    handleDeleteBlogPost(
+                                                        post.id,
+                                                    )}
                                                 class="p-2 border border-white/10 hover:bg-brand-red hover:border-brand-red hover:text-white text-brand-red transition-all cursor-pointer"
-                                            ><Trash2 class="w-4 h-4" /></button>
+                                                ><Trash2
+                                                    class="w-4 h-4"
+                                                /></button
+                                            >
                                         </div>
                                     </div>
                                 {/each}
@@ -4128,14 +4252,24 @@
                 {/if}
                 {#if adminTab === "users"}
                     <div class="space-y-8">
-                        <h2 class="text-3xl font-display font-light uppercase tracking-tight text-white">
-                            Пользователи <span class="font-serif italic text-white/40 lowercase">системы</span>
+                        <h2
+                            class="text-3xl font-display font-light uppercase tracking-tight text-white"
+                        >
+                            Пользователи <span
+                                class="font-serif italic text-white/40 lowercase"
+                                >системы</span
+                            >
                         </h2>
 
                         <!-- Search -->
-                        <div class="flex items-end gap-4 border-b border-white/10 pb-6">
+                        <div
+                            class="flex items-end gap-4 border-b border-white/10 pb-6"
+                        >
                             <div class="space-y-1">
-                                <label class="text-[9px] uppercase tracking-widest text-white/40 block font-mono">Поиск по телефону</label>
+                                <label
+                                    class="text-[9px] uppercase tracking-widest text-white/40 block font-mono"
+                                    >Поиск по телефону</label
+                                >
                                 <input
                                     type="text"
                                     bind:value={userSearchPhone}
@@ -4147,65 +4281,136 @@
                                 <button
                                     onclick={() => (userSearchPhone = "")}
                                     class="px-4 py-2 border border-white/10 text-[10px] font-mono uppercase text-white/60 hover:text-white hover:border-white transition-colors cursor-pointer rounded-sm"
-                                >Сбросить</button>
+                                    >Сбросить</button
+                                >
                             {/if}
                         </div>
 
                         {#if filteredAdminUsers.length === 0}
-                            <p class="text-sm font-mono text-white/30 italic">Пользователи не найдены</p>
+                            <p class="text-sm font-mono text-white/30 italic">
+                                Пользователи не найдены
+                            </p>
                         {:else}
                             <div class="overflow-x-auto border border-white/10">
-                                <table class="w-full text-left border-collapse text-xs font-light">
+                                <table
+                                    class="w-full text-left border-collapse text-xs font-light"
+                                >
                                     <thead>
-                                        <tr class="border-b border-white/10 bg-white/[0.02] text-[9px] uppercase tracking-widest font-mono text-white/40">
+                                        <tr
+                                            class="border-b border-white/10 bg-white/[0.02] text-[9px] uppercase tracking-widest font-mono text-white/40"
+                                        >
                                             <th class="p-4">ID</th>
                                             <th class="p-4">Имя</th>
                                             <th class="p-4">Телефон</th>
                                             <th class="p-4">Email</th>
                                             <th class="p-4">Адрес</th>
                                             <th class="p-4">Роль</th>
-                                            <th class="p-4">Дата регистрации</th>
+                                            <th class="p-4">Дата регистрации</th
+                                            >
                                             {#if currentUser?.role === "super_admin"}
-                                                <th class="p-4 text-right">Действия</th>
+                                                <th class="p-4 text-right"
+                                                    >Действия</th
+                                                >
                                             {/if}
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {#each filteredAdminUsers as u}
-                                            <tr class="border-b border-white/5 hover:bg-white/[0.01] transition-colors">
-                                                <td class="p-4 font-mono text-white/40">{u.id}</td>
-                                                <td class="p-4 font-bold text-white">{u.name}</td>
-                                                <td class="p-4 text-white/80 font-mono">{u.phone}</td>
-                                                <td class="p-4 text-white/50">{u.email ?? "—"}</td>
-                                                <td class="p-4 text-white/50">{u.default_address ?? "—"}</td>
+                                            <tr
+                                                class="border-b border-white/5 hover:bg-white/[0.01] transition-colors"
+                                            >
+                                                <td
+                                                    class="p-4 font-mono text-white/40"
+                                                    >{u.id}</td
+                                                >
+                                                <td
+                                                    class="p-4 font-bold text-white"
+                                                    >{u.name}</td
+                                                >
+                                                <td
+                                                    class="p-4 text-white/80 font-mono"
+                                                    >{u.phone}</td
+                                                >
+                                                <td class="p-4 text-white/50"
+                                                    >{u.email ?? "—"}</td
+                                                >
+                                                <td class="p-4 text-white/50"
+                                                    >{u.default_address ??
+                                                        "—"}</td
+                                                >
                                                 <td class="p-4">
-                                                    <span class="px-2 py-1 text-[9px] font-mono uppercase tracking-widest rounded-sm {u.role === 'super_admin' ? 'bg-brand-red text-white' : u.role === 'admin' ? 'bg-white/20 text-white' : 'bg-white/5 text-white/50'}">
+                                                    <span
+                                                        class="px-2 py-1 text-[9px] font-mono uppercase tracking-widest rounded-sm {u.role ===
+                                                        'super_admin'
+                                                            ? 'bg-brand-red text-white'
+                                                            : u.role === 'admin'
+                                                              ? 'bg-white/20 text-white'
+                                                              : 'bg-white/5 text-white/50'}"
+                                                    >
                                                         {u.role}
                                                     </span>
                                                 </td>
-                                                <td class="p-4 font-mono text-white/40 text-[10px]">{new Date(u.created_at).toLocaleDateString("ru-RU")}</td>
+                                                <td
+                                                    class="p-4 font-mono text-white/40 text-[10px]"
+                                                    >{new Date(
+                                                        u.created_at,
+                                                    ).toLocaleDateString(
+                                                        "ru-RU",
+                                                    )}</td
+                                                >
                                                 {#if currentUser?.role === "super_admin"}
                                                     <td class="p-4 text-right">
-                                                        <div class="flex items-center justify-end gap-2">
+                                                        <div
+                                                            class="flex items-center justify-end gap-2"
+                                                        >
                                                             {#if u.id !== currentUser?.id}
                                                                 <select
                                                                     value={u.role}
-                                                                    onchange={(e) => handleUpdateUserRole(u.id, (e.target as HTMLSelectElement).value)}
+                                                                    onchange={(
+                                                                        e,
+                                                                    ) =>
+                                                                        handleUpdateUserRole(
+                                                                            u.id,
+                                                                            (
+                                                                                e.target as HTMLSelectElement
+                                                                            )
+                                                                                .value,
+                                                                        )}
                                                                     class="bg-brand-gray border border-white/10 px-2 py-1 text-[10px] text-white focus:outline-none focus:border-brand-red rounded-sm cursor-pointer"
                                                                 >
-                                                                    <option value="user" class="text-black bg-white">user</option>
-                                                                    <option value="admin" class="text-black bg-white">admin</option>
-                                                                    <option value="super_admin" class="text-black bg-white">super_admin</option>
+                                                                    <option
+                                                                        value="user"
+                                                                        class="text-black bg-white"
+                                                                        >user</option
+                                                                    >
+                                                                    <option
+                                                                        value="admin"
+                                                                        class="text-black bg-white"
+                                                                        >admin</option
+                                                                    >
+                                                                    <option
+                                                                        value="super_admin"
+                                                                        class="text-black bg-white"
+                                                                        >super_admin</option
+                                                                    >
                                                                 </select>
                                                                 <button
-                                                                    onclick={() => handleDeleteUser(u.id)}
+                                                                    onclick={() =>
+                                                                        handleDeleteUser(
+                                                                            u.id,
+                                                                        )}
                                                                     class="p-2 border border-white/10 hover:bg-brand-red hover:border-brand-red hover:text-white text-brand-red transition-all cursor-pointer"
                                                                     title="Удалить пользователя"
                                                                 >
-                                                                    <Trash2 class="w-3 h-3" />
+                                                                    <Trash2
+                                                                        class="w-3 h-3"
+                                                                    />
                                                                 </button>
                                                             {:else}
-                                                                <span class="text-[9px] font-mono text-white/30">вы</span>
+                                                                <span
+                                                                    class="text-[9px] font-mono text-white/30"
+                                                                    >вы</span
+                                                                >
                                                             {/if}
                                                         </div>
                                                     </td>
@@ -4222,22 +4427,34 @@
                 {#if adminTab === "audit-log"}
                     <div class="space-y-8">
                         <div class="flex items-center justify-between">
-                            <h2 class="text-3xl font-display font-light uppercase tracking-tight text-white">
-                                Журнал <span class="font-serif italic text-white/40 lowercase">аудита</span>
+                            <h2
+                                class="text-3xl font-display font-light uppercase tracking-tight text-white"
+                            >
+                                Журнал <span
+                                    class="font-serif italic text-white/40 lowercase"
+                                    >аудита</span
+                                >
                             </h2>
                             <button
                                 onclick={fetchAuditLog}
                                 class="px-4 py-2 border border-white/10 text-[10px] font-mono uppercase text-white/60 hover:text-white hover:border-white transition-colors cursor-pointer"
-                            >Обновить</button>
+                                >Обновить</button
+                            >
                         </div>
 
                         {#if auditLog.length === 0}
-                            <p class="text-sm font-mono text-white/30 italic">Записей в журнале пока нет</p>
+                            <p class="text-sm font-mono text-white/30 italic">
+                                Записей в журнале пока нет
+                            </p>
                         {:else}
                             <div class="overflow-x-auto border border-white/10">
-                                <table class="w-full text-left border-collapse text-xs font-light">
+                                <table
+                                    class="w-full text-left border-collapse text-xs font-light"
+                                >
                                     <thead>
-                                        <tr class="border-b border-white/10 bg-white/[0.02] text-[9px] uppercase tracking-widest font-mono text-white/40">
+                                        <tr
+                                            class="border-b border-white/10 bg-white/[0.02] text-[9px] uppercase tracking-widest font-mono text-white/40"
+                                        >
                                             <th class="p-4">ID</th>
                                             <th class="p-4">Время</th>
                                             <th class="p-4">Действие</th>
@@ -4249,16 +4466,45 @@
                                     </thead>
                                     <tbody>
                                         {#each auditLog as entry}
-                                            <tr class="border-b border-white/5 hover:bg-white/[0.01] transition-colors">
-                                                <td class="p-4 font-mono text-white/30">{entry.id}</td>
-                                                <td class="p-4 font-mono text-white/50 text-[10px] whitespace-nowrap">{new Date(entry.created_at).toLocaleString("ru-RU")}</td>
+                                            <tr
+                                                class="border-b border-white/5 hover:bg-white/[0.01] transition-colors"
+                                            >
+                                                <td
+                                                    class="p-4 font-mono text-white/30"
+                                                    >{entry.id}</td
+                                                >
+                                                <td
+                                                    class="p-4 font-mono text-white/50 text-[10px] whitespace-nowrap"
+                                                    >{new Date(
+                                                        entry.created_at,
+                                                    ).toLocaleString(
+                                                        "ru-RU",
+                                                    )}</td
+                                                >
                                                 <td class="p-4">
-                                                    <span class="px-2 py-1 text-[9px] font-mono uppercase tracking-widest bg-white/5 text-white/80 rounded-sm">{entry.action}</span>
+                                                    <span
+                                                        class="px-2 py-1 text-[9px] font-mono uppercase tracking-widest bg-white/5 text-white/80 rounded-sm"
+                                                        >{entry.action}</span
+                                                    >
                                                 </td>
-                                                <td class="p-4 font-mono text-white/50">{entry.entity_type || "—"}</td>
-                                                <td class="p-4 font-mono text-white/40">{entry.entity_id ?? "—"}</td>
-                                                <td class="p-4 text-white/60 max-w-xs truncate">{entry.details || "—"}</td>
-                                                <td class="p-4 font-mono text-white/40">{entry.admin_id ?? "—"}</td>
+                                                <td
+                                                    class="p-4 font-mono text-white/50"
+                                                    >{entry.entity_type ||
+                                                        "—"}</td
+                                                >
+                                                <td
+                                                    class="p-4 font-mono text-white/40"
+                                                    >{entry.entity_id ??
+                                                        "—"}</td
+                                                >
+                                                <td
+                                                    class="p-4 text-white/60 max-w-xs truncate"
+                                                    >{entry.details || "—"}</td
+                                                >
+                                                <td
+                                                    class="p-4 font-mono text-white/40"
+                                                    >{entry.admin_id ?? "—"}</td
+                                                >
                                             </tr>
                                         {/each}
                                     </tbody>
