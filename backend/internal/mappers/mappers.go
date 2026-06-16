@@ -57,6 +57,29 @@ func ToProductResponseList(products []models.Product) []dto.ProductResponse {
 	return res
 }
 
+func ToBlogPostResponse(p *models.BlogPost) dto.BlogPostResponse {
+	return dto.BlogPostResponse{
+		ID:          p.ID,
+		Title:       p.Title,
+		Subtitle:    p.Subtitle,
+		Content:     p.Content,
+		ImageURL:    p.ImageURL,
+		Tag:         p.Tag,
+		ReadTime:    p.ReadTime,
+		IsPublished: p.IsPublished,
+		CreatedAt:   p.CreatedAt,
+		UpdatedAt:   p.UpdatedAt,
+	}
+}
+
+func ToBlogPostResponseList(posts []models.BlogPost) []dto.BlogPostResponse {
+	res := make([]dto.BlogPostResponse, len(posts))
+	for i, p := range posts {
+		res[i] = ToBlogPostResponse(&p)
+	}
+	return res
+}
+
 func ToOrderResponse(o *models.Order, items []dto.OrderItemResponse) dto.OrderResponse {
 	return dto.OrderResponse{
 		ID:            o.ID,

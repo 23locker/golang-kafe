@@ -40,6 +40,14 @@ type OrderRepository interface {
 	UpdateStatusByID(ctx context.Context, orderID int, status string) error
 }
 
+type BlogPostRepository interface {
+	GetAll(ctx context.Context, publishedOnly bool) ([]models.BlogPost, error)
+	GetByID(ctx context.Context, id int) (*models.BlogPost, error)
+	Create(ctx context.Context, p *models.BlogPost) error
+	Update(ctx context.Context, p *models.BlogPost) error
+	Delete(ctx context.Context, id int) error
+}
+
 type ReservationRepository interface {
 	Create(ctx context.Context, r *models.Reservation) error
 	GetByUserID(ctx context.Context, userID int) ([]models.Reservation, error)
@@ -352,6 +360,80 @@ func (r *PostgresOrderRepository) UpdateStatusByID(ctx context.Context, orderID 
 	_, err := r.db.ExecContext(ctx, query, status, orderID)
 	if err != nil {
 		return fmt.Errorf("ошибка обновления статуса заказа: %w", err)
+	}
+	return nil
+}
+
+type PostgresBlogPostRepository struct {
+	db *sql.DB
+}
+
+func NewPostgresBlogPostRepository(db *sql.DB) *PostgresBlogPostRepository {
+	return &PostgresBlogPostRepository{db: db}
+}
+
+func (r *PostgresBlogPostRepository) GetAll(ctx context.Context, publishedOnly bool) ([]models.BlogPost, error) {
+	query := `SELECT id, title, subtitle, content, image_url, tag, read_time, is_published, created_at, updated_at FROM blog_posts`
+	if publishedOnly {
+		query += ` WHERE is_published = TRUE`
+	}
+	query += ` ORDER BY created_at DESC`
+
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка получения постов блога: %w", err)
+	}
+	defer rows.Close()
+
+	var list []models.BlogPost
+	for rows.Next() {
+		var p models.BlogPost
+		if err := rows.Scan(&p.ID, &p.Title, &p.Subtitle, &p.Content, &p.ImageURL, &p.Tag, &p.ReadTime, &p.IsPublished, &p.CreatedAt, &p.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("ошибка сканирования поста: %w", err)
+		}
+		list = append(list, p)
+	}
+	return list, nil
+}
+
+func (r *PostgresBlogPostRepository) GetByID(ctx context.Context, id int) (*models.BlogPost, error) {
+	query := `SELECT id, title, subtitle, content, image_url, tag, read_time, is_published, created_at, updated_at FROM blog_posts WHERE id = $1`
+	var p models.BlogPost
+	err := r.db.QueryRowContext(ctx, query, id).Scan(&p.ID, &p.Title, &p.Subtitle, &p.Content, &p.ImageURL, &p.Tag, &p.ReadTime, &p.IsPublished, &p.CreatedAt, &p.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("пост не найден")
+		}
+		return nil, fmt.Errorf("ошибка получения поста: %w", err)
+	}
+	return &p, nil
+}
+
+func (r *PostgresBlogPostRepository) Create(ctx context.Context, p *models.BlogPost) error {
+	query := `INSERT INTO blog_posts (title, subtitle, content, image_url, tag, read_time, is_published)
+	          VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, created_at, updated_at`
+	err := r.db.QueryRowContext(ctx, query, p.Title, p.Subtitle, p.Content, p.ImageURL, p.Tag, p.ReadTime, p.IsPublished).
+		Scan(&p.ID, &p.CreatedAt, &p.UpdatedAt)
+	if err != nil {
+		return fmt.Errorf("ошибка создания поста: %w", err)
+	}
+	return nil
+}
+
+func (r *PostgresBlogPostRepository) Update(ctx context.Context, p *models.BlogPost) error {
+	query := `UPDATE blog_posts SET title=$1, subtitle=$2, content=$3, image_url=$4, tag=$5, read_time=$6, is_published=$7, updated_at=NOW() WHERE id=$8`
+	_, err := r.db.ExecContext(ctx, query, p.Title, p.Subtitle, p.Content, p.ImageURL, p.Tag, p.ReadTime, p.IsPublished, p.ID)
+	if err != nil {
+		return fmt.Errorf("ошибка обновления поста: %w", err)
+	}
+	return nil
+}
+
+func (r *PostgresBlogPostRepository) Delete(ctx context.Context, id int) error {
+	query := `DELETE FROM blog_posts WHERE id = $1`
+	_, err := r.db.ExecContext(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("ошибка удаления поста: %w", err)
 	}
 	return nil
 }

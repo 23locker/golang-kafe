@@ -55,6 +55,11 @@ type ReservationService interface {
 	GetReservationsByUserID(ctx context.Context, userID int) ([]dto.ReservationResponse, error)
 }
 
+type BlogService interface {
+	GetPosts(ctx context.Context) ([]dto.BlogPostResponse, error)
+	GetPostByID(ctx context.Context, id int) (dto.BlogPostResponse, error)
+}
+
 type AdminService interface {
 	GetOrders(ctx context.Context) ([]dto.OrderResponse, error)
 	UpdateOrderStatus(ctx context.Context, orderID int, status string) error
@@ -67,6 +72,10 @@ type AdminService interface {
 	UpdateCategory(ctx context.Context, id int, req dto.CategoryResponse) (dto.CategoryResponse, error)
 	DeleteCategory(ctx context.Context, id int) error
 	GetStats(ctx context.Context, startDate, endDate string) (map[string]interface{}, error)
+	GetAllBlogPosts(ctx context.Context) ([]dto.BlogPostResponse, error)
+	CreateBlogPost(ctx context.Context, req dto.BlogPostResponse) (dto.BlogPostResponse, error)
+	UpdateBlogPost(ctx context.Context, id int, req dto.BlogPostResponse) (dto.BlogPostResponse, error)
+	DeleteBlogPost(ctx context.Context, id int) error
 }
 
 type AuthServiceImpl struct {
@@ -325,6 +334,16 @@ func (s *ReservationServiceImpl) CreateReservation(ctx context.Context, userID *
 		return nil, fmt.Errorf("неверный формат даты, ожидается гггг-мм-дд: %w", err)
 	}
 
+	var hour, minute int
+	if n, _ := fmt.Sscanf(req.ReserveTime, "%d:%d", &hour, &minute); n != 2 || hour < 0 || hour > 23 || minute < 0 || minute > 59 {
+		return nil, fmt.Errorf("неверный формат времени, ожидается ЧЧ:ММ")
+	}
+	moscow := time.FixedZone("MSK", 3*60*60)
+	reserveDateTime := time.Date(parsedDate.Year(), parsedDate.Month(), parsedDate.Day(), hour, minute, 0, 0, moscow)
+	if !reserveDateTime.After(time.Now().In(moscow)) {
+		return nil, fmt.Errorf("выбранное время бронирования уже прошло. Пожалуйста, выберите более позднее время")
+	}
+
 	res := &models.Reservation{
 		UserID:       userID,
 		CustomerName: req.CustomerName,
@@ -352,21 +371,48 @@ func (s *ReservationServiceImpl) GetReservationsByUserID(ctx context.Context, us
 	return mappers.ToReservationResponseList(reservations), nil
 }
 
+type BlogServiceImpl struct {
+	blogRepo repositories.BlogPostRepository
+}
+
+func NewBlogService(blogRepo repositories.BlogPostRepository) *BlogServiceImpl {
+	return &BlogServiceImpl{blogRepo: blogRepo}
+}
+
+func (s *BlogServiceImpl) GetPosts(ctx context.Context) ([]dto.BlogPostResponse, error) {
+	posts, err := s.blogRepo.GetAll(ctx, true)
+	if err != nil {
+		return nil, err
+	}
+	return mappers.ToBlogPostResponseList(posts), nil
+}
+
+func (s *BlogServiceImpl) GetPostByID(ctx context.Context, id int) (dto.BlogPostResponse, error) {
+	p, err := s.blogRepo.GetByID(ctx, id)
+	if err != nil {
+		return dto.BlogPostResponse{}, err
+	}
+	return mappers.ToBlogPostResponse(p), nil
+}
+
 type AdminServiceImpl struct {
 	orderRepo   repositories.OrderRepository
 	resRepo     repositories.ReservationRepository
 	productRepo repositories.ProductRepository
+	blogRepo    repositories.BlogPostRepository
 }
 
 func NewAdminService(
 	orderRepo repositories.OrderRepository,
 	resRepo repositories.ReservationRepository,
 	productRepo repositories.ProductRepository,
+	blogRepo repositories.BlogPostRepository,
 ) *AdminServiceImpl {
 	return &AdminServiceImpl{
 		orderRepo:   orderRepo,
 		resRepo:     resRepo,
 		productRepo: productRepo,
+		blogRepo:    blogRepo,
 	}
 }
 
@@ -471,6 +517,7 @@ func (s *AdminServiceImpl) CreateProduct(ctx context.Context, req dto.ProductRes
 		ImageURL:    req.ImageURL,
 		Weight:      req.Weight,
 		Calories:    req.Calories,
+		IsAvailable: req.IsAvailable,
 	}
 
 	err := s.productRepo.Create(ctx, p)
@@ -507,6 +554,57 @@ func (s *AdminServiceImpl) UpdateProduct(ctx context.Context, id int, req dto.Pr
 
 func (s *AdminServiceImpl) DeleteProduct(ctx context.Context, id int) error {
 	return s.productRepo.Delete(ctx, id)
+}
+
+func (s *AdminServiceImpl) GetAllBlogPosts(ctx context.Context) ([]dto.BlogPostResponse, error) {
+	posts, err := s.blogRepo.GetAll(ctx, false)
+	if err != nil {
+		return nil, err
+	}
+	return mappers.ToBlogPostResponseList(posts), nil
+}
+
+func (s *AdminServiceImpl) CreateBlogPost(ctx context.Context, req dto.BlogPostResponse) (dto.BlogPostResponse, error) {
+	if req.Title == "" {
+		return dto.BlogPostResponse{}, fmt.Errorf("заголовок статьи обязателен")
+	}
+	p := &models.BlogPost{
+		Title:       req.Title,
+		Subtitle:    req.Subtitle,
+		Content:     req.Content,
+		ImageURL:    req.ImageURL,
+		Tag:         req.Tag,
+		ReadTime:    req.ReadTime,
+		IsPublished: req.IsPublished,
+	}
+	if err := s.blogRepo.Create(ctx, p); err != nil {
+		return dto.BlogPostResponse{}, err
+	}
+	return mappers.ToBlogPostResponse(p), nil
+}
+
+func (s *AdminServiceImpl) UpdateBlogPost(ctx context.Context, id int, req dto.BlogPostResponse) (dto.BlogPostResponse, error) {
+	if req.Title == "" {
+		return dto.BlogPostResponse{}, fmt.Errorf("заголовок статьи обязателен")
+	}
+	p := &models.BlogPost{
+		ID:          id,
+		Title:       req.Title,
+		Subtitle:    req.Subtitle,
+		Content:     req.Content,
+		ImageURL:    req.ImageURL,
+		Tag:         req.Tag,
+		ReadTime:    req.ReadTime,
+		IsPublished: req.IsPublished,
+	}
+	if err := s.blogRepo.Update(ctx, p); err != nil {
+		return dto.BlogPostResponse{}, err
+	}
+	return mappers.ToBlogPostResponse(p), nil
+}
+
+func (s *AdminServiceImpl) DeleteBlogPost(ctx context.Context, id int) error {
+	return s.blogRepo.Delete(ctx, id)
 }
 
 func (s *AdminServiceImpl) GetStats(ctx context.Context, startDate, endDate string) (map[string]interface{}, error) {

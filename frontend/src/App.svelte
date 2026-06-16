@@ -88,7 +88,7 @@
         "home",
     );
     let adminTab = $state<
-        "stats" | "orders" | "reservations" | "menu" | "categories"
+        "stats" | "orders" | "reservations" | "menu" | "categories" | "blog"
     >("stats");
 
     // Booking date boundaries
@@ -114,66 +114,59 @@
     // Auth state
     let currentUser = $state<UserInfo | null>(null);
 
-    interface BlogPost {
-        id: string;
+    interface ApiBlogPost {
+        id: number;
         title: string;
         subtitle: string;
-        date: string;
-        readTime: string;
-        tag: string;
-        image: string;
         content: string;
+        image_url: string;
+        tag: string;
+        read_time: string;
+        is_published: boolean;
+        created_at: string;
+        updated_at: string;
     }
 
-    let blogPosts: BlogPost[] = [
-        {
-            id: "1",
-            title: "Искусство бурятских бууз",
-            subtitle: "Секреты идеального бульона и лепки в 33 защипа",
-            date: "12 Мая, 2026",
-            readTime: "5 мин чтения",
-            tag: "Традиции",
-            image: "/images/hero_buuzy_plate.png",
-            content:
-                "Настоящие буузы — это не просто блюдо, а кулинарный шедевр с вековой историей. Форма бууз напоминает юрту, традиционное жилище кочевников. Отверстие наверху символизирует дымоход, а складочки (в идеале их должно быть ровно 33) символизируют складки юрты. Главное правило при употреблении бууз — не пролить ни капли ароматного мясного бульона, который скапливается внутри при приготовлении на пару. Для этого буузу аккуратно надкусывают сбоку, выпивают горячий бульон, а затем съедают остальное. В нашем кафе мы готовим фарш исключительно вручную, используя только свежую говядину и свинину, лук и специи. Никаких искусственных добавок — только чистый вкус традиций.",
-        },
-        {
-            id: "2",
-            title: "Шулэн и Бухлёр: супы кочевников",
-            subtitle:
-                "Как традиционные бульоны согревали в суровые степные морозы",
-            date: "28 Апреля, 2026",
-            readTime: "4 мин чтения",
-            tag: "Кухня",
-            image: "/images/hero_steak_plate_1779197902033.png",
-            content:
-                "Для кочевых народов Бурятии мясной бульон всегда был основой рациона в холодное время года. Бухлёр — это квинтэссенция простоты и питательности. Он готовится из крупных кусков свежей баранины или говядины с добавлением только лука и соли. Ничего лишнего, чтобы не перебивать вкус чистого мяса. Шулэн же представляет собой домашнюю лапшу в наваристом бульоне с мелко нарезанным мясом. Эти супы не просто насыщают, они обладают целебными свойствами, помогают при простуде и быстро восстанавливают силы после долгого пути.",
-        },
-        {
-            id: "3",
-            title: "Сибирское золото: польза облепихи",
-            subtitle: "Почему облепиховый морс — лучший выбор в нашем кафе",
-            date: "15 Марта, 2026",
-            readTime: "3 мин чтения",
-            tag: "Ингредиенты",
-            image: "/images/creamy_mushrooms_plate_1779198170202.png",
-            content:
-                "Облепиха — уникальная ягода, произрастающая в суровых климатических условиях Сибири и Забайкалья. Её называют сибирским ананасом за яркий кисло-сладкий вкус. Облепиха богата витаминами C, E, группы B, каротином и полезными жирными кислотами. Наш облепиховый морс готовится по особой технологии без кипячения, что позволяет сохранить все витамины и полезные свойства ягоды. Он отлично дополняет сытные мясные блюда, помогая пищеварению и оставляя приятное освежающее послевкусие.",
-        },
-        {
-            id: "4",
-            title: "Рецепты предков: 12 лет качества",
-            subtitle: "История создания нашего уютного заведения",
-            date: "10 Февраля, 2026",
-            readTime: "6 мин чтения",
-            tag: "О нас",
-            image: "/images/fresh_salad_plate_1779198150233.png",
-            content:
-                "Кафе «Байкал Буузы» было основано 12 лет назад с простой, но амбициозной целью — поделиться богатством бурятской кулинарной культуры с миром. Мы начинали с небольшого семейного кафе, где сами лепили буузы для первых гостей. С тех пор мы расширились, но сохранили главное — бескомпромиссное отношение к качеству продуктов и верность оригинальным рецептам. Каждый день наши повара приходят на кухню ранним утром, чтобы замесить свежее тесто и приготовить свежий фарш. Мы верим, что еда, приготовленная с душой, сближает людей.",
-        },
-    ];
+    let blogPosts = $state<ApiBlogPost[]>([]);
+    let adminBlogPosts = $state<ApiBlogPost[]>([]);
 
-    let selectedBlogPost = $state<BlogPost | null>(null);
+    let selectedBlogPost = $state<ApiBlogPost | null>(null);
+
+    // Blog admin form state
+    let isBlogFormOpen = $state(false);
+    let editingBlogId = $state<number | null>(null);
+    let blogFormTitle = $state("");
+    let blogFormSubtitle = $state("");
+    let blogFormContent = $state("");
+    let blogFormTag = $state("");
+    let blogFormReadTime = $state("");
+    let blogFormImage = $state("");
+    let blogFormImageFile = $state<File | null>(null);
+    let blogFormIsPublished = $state(true);
+
+    function formatBlogDate(isoDate: string): string {
+        return new Date(isoDate).toLocaleDateString("ru-RU", {
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+        });
+    }
+
+    function localizeOrderStatus(status: string): string {
+        const map: Record<string, string> = {
+            pending: "Ожидает оплаты",
+            awaiting_delivery: "Ожидает доставки",
+            preparing: "Готовится",
+            delivering: "В пути",
+            delivered: "Доставлен",
+            cancelled: "Отменён",
+        };
+        return map[status] ?? status;
+    }
+
+    function isAdminRole(user: UserInfo | null): boolean {
+        return user?.role === "chief_admin" || user?.role === "establishment_admin";
+    }
 
     // Первые 4 доступных блюда для секции "Популярное"
     let popularDishes = $derived(dishes.slice(0, 4));
@@ -279,6 +272,106 @@
         }
     }
 
+    async function fetchBlogPosts() {
+        try {
+            const res = await fetch("/api/blog");
+            if (res.ok) {
+                blogPosts = await res.json();
+            }
+        } catch (e) {
+            console.error("Failed to load blog posts:", e);
+        }
+    }
+
+    async function fetchAdminBlogPosts() {
+        try {
+            const res = await fetch("/api/admin/blog");
+            if (res.ok) {
+                adminBlogPosts = await res.json();
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    function openCreateBlogForm() {
+        editingBlogId = null;
+        blogFormTitle = "";
+        blogFormSubtitle = "";
+        blogFormContent = "";
+        blogFormTag = "";
+        blogFormReadTime = "";
+        blogFormImage = "";
+        blogFormImageFile = null;
+        blogFormIsPublished = true;
+        isBlogFormOpen = true;
+    }
+
+    function openEditBlogForm(post: ApiBlogPost) {
+        editingBlogId = post.id;
+        blogFormTitle = post.title;
+        blogFormSubtitle = post.subtitle;
+        blogFormContent = post.content;
+        blogFormTag = post.tag;
+        blogFormReadTime = post.read_time;
+        blogFormImage = post.image_url;
+        blogFormImageFile = null;
+        blogFormIsPublished = post.is_published;
+        isBlogFormOpen = true;
+    }
+
+    async function handleSaveBlogPost() {
+        if (!blogFormTitle) {
+            alert("Укажите заголовок статьи");
+            return;
+        }
+        const formData = new FormData();
+        formData.append("title", blogFormTitle);
+        formData.append("subtitle", blogFormSubtitle);
+        formData.append("content", blogFormContent);
+        formData.append("tag", blogFormTag);
+        formData.append("read_time", blogFormReadTime);
+        formData.append("is_published", blogFormIsPublished.toString());
+        if (blogFormImageFile) {
+            formData.append("image", blogFormImageFile);
+        }
+        try {
+            const url = editingBlogId
+                ? `/api/admin/blog/${editingBlogId}`
+                : "/api/admin/blog";
+            const method = editingBlogId ? "PUT" : "POST";
+            const res = await fetch(url, { method, body: formData });
+            if (res.ok) {
+                isBlogFormOpen = false;
+                fetchBlogPosts();
+                fetchAdminBlogPosts();
+            } else {
+                const err = await res.text();
+                alert("Ошибка при сохранении статьи: " + err);
+            }
+        } catch (e) {
+            alert("Ошибка соединения с сервером");
+        }
+    }
+
+    async function handleDeleteBlogPost(id: number) {
+        if (!confirm("Вы действительно хотите удалить эту статью?")) return;
+        try {
+            const res = await fetch(`/api/admin/blog/${id}`, {
+                method: "DELETE",
+            });
+            if (res.ok) {
+                fetchBlogPosts();
+                fetchAdminBlogPosts();
+            } else {
+                const err = await res.text();
+                alert("Ошибка при удалении статьи: " + err);
+            }
+        } catch (e) {
+            alert("Ошибка соединения");
+        }
+    }
+
     // Load current user profile
     async function fetchProfile() {
         try {
@@ -351,10 +444,11 @@
         }
     }
 
-    onMount(() => {
+    onMount(async () => {
         isMounted = true;
         fetchMenu();
-        fetchProfile();
+        fetchBlogPosts();
+        await fetchProfile();
 
         // Set reservation date boundaries (today to today + 1 month)
         const todayObj = new Date();
@@ -367,6 +461,11 @@
         // Check hash for routing
         const handleHash = () => {
             if (window.location.hash === "#admin") {
+                if (!isAdminRole(currentUser)) {
+                    window.location.hash = "";
+                    currentView = "home";
+                    return;
+                }
                 currentView = "admin";
                 if (
                     currentUser &&
@@ -561,6 +660,17 @@
             return;
         }
 
+        // Validate that reservation datetime has not yet passed in Moscow time (UTC+3)
+        const moscowOffsetMs = 3 * 60 * 60 * 1000;
+        const nowMoscowMs = Date.now() + moscowOffsetMs;
+        const [rYear, rMonth, rDay] = reserveDate.split("-").map(Number);
+        const [rHour, rMinute] = reserveTime.split(":").map(Number);
+        const reserveMoscowMs = Date.UTC(rYear, rMonth - 1, rDay, rHour, rMinute, 0);
+        if (reserveMoscowMs <= nowMoscowMs) {
+            alert("Выбранное время уже прошло. Пожалуйста, выберите более позднее время (по московскому времени)");
+            return;
+        }
+
         try {
             const res = await fetch("/api/reservations", {
                 method: "POST",
@@ -664,6 +774,10 @@
                 userOrders = [];
                 userReservations = [];
                 isProfileOpen = false;
+                if (currentView === "admin") {
+                    currentView = "home";
+                    window.location.hash = "";
+                }
                 // Сбрасываем данные форм
                 checkoutName = "";
                 checkoutPhone = "";
@@ -1185,7 +1299,7 @@
                                             >
                                             <span
                                                 class="text-brand-red uppercase"
-                                                >{order.payment_status}</span
+                                                >{localizeOrderStatus(order.payment_status)}</span
                                             >
                                         </div>
                                         <div class="space-y-2">
@@ -1985,58 +2099,68 @@
 
             <!-- Blog Posts Grid -->
             <section class="py-20 px-6 md:px-12 lg:px-20 bg-[#030303]">
-                <div class="w-full grid grid-cols-1 md:grid-cols-2 gap-12">
-                    {#each blogPosts as post}
-                        <button
-                            onclick={() => (selectedBlogPost = post)}
-                            class="text-left bg-white/[0.01] border border-white/5 p-8 group transition-all duration-700 hover:border-white/20 hover:-translate-y-1 relative overflow-hidden flex flex-col justify-between h-[450px] cursor-pointer"
-                        >
-                            <div
-                                class="relative w-full h-48 overflow-hidden bg-[#0a0a0a] mb-6"
+                {#if blogPosts.length === 0}
+                    <p class="text-white/30 text-center font-mono text-sm py-20">
+                        Статьи пока не опубликованы
+                    </p>
+                {:else}
+                    <div class="w-full grid grid-cols-1 md:grid-cols-2 gap-12">
+                        {#each blogPosts as post}
+                            <button
+                                onclick={() => (selectedBlogPost = post)}
+                                class="text-left bg-white/[0.01] border border-white/5 p-8 group transition-all duration-700 hover:border-white/20 hover:-translate-y-1 relative overflow-hidden flex flex-col justify-between h-[450px] cursor-pointer"
                             >
-                                <img
-                                    src={post.image}
-                                    alt={post.title}
-                                    class="w-full h-full object-cover grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100 group-hover:scale-105 transition-all duration-1000 ease-out"
-                                />
-                                <span
-                                    class="absolute top-4 left-4 bg-black/80 border border-white/10 px-3 py-1 text-[8px] font-mono uppercase tracking-widest text-white"
-                                >
-                                    {post.tag}
-                                </span>
-                            </div>
-
-                            <div class="flex-1 space-y-4">
                                 <div
-                                    class="flex items-center gap-4 text-[10px] font-mono text-white/40"
+                                    class="relative w-full h-48 overflow-hidden bg-[#0a0a0a] mb-6"
                                 >
-                                    <span>{post.date}</span>
-                                    <span>•</span>
-                                    <span>{post.readTime}</span>
+                                    <img
+                                        src={post.image_url || "/images/placeholder.jpg"}
+                                        alt={post.title}
+                                        class="w-full h-full object-cover grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100 group-hover:scale-105 transition-all duration-1000 ease-out"
+                                    />
+                                    {#if post.tag}
+                                        <span
+                                            class="absolute top-4 left-4 bg-black/80 border border-white/10 px-3 py-1 text-[8px] font-mono uppercase tracking-widest text-white"
+                                        >
+                                            {post.tag}
+                                        </span>
+                                    {/if}
                                 </div>
-                                <h3
-                                    class="text-2xl font-display font-light uppercase tracking-tight text-white group-hover:text-brand-red transition-colors duration-500"
-                                >
-                                    {post.title}
-                                </h3>
-                                <p
-                                    class="text-xs text-white/50 font-light line-clamp-3 leading-relaxed"
-                                >
-                                    {post.subtitle}
-                                </p>
-                            </div>
 
-                            <div
-                                class="mt-6 pt-4 border-t border-white/5 flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.2em] text-white/40 group-hover:text-white transition-colors duration-500"
-                            >
-                                <span>Читать статью</span>
-                                <ChevronRight
-                                    class="w-3 h-3 text-white/40 group-hover:text-white transition-colors"
-                                />
-                            </div>
-                        </button>
-                    {/each}
-                </div>
+                                <div class="flex-1 space-y-4">
+                                    <div
+                                        class="flex items-center gap-4 text-[10px] font-mono text-white/40"
+                                    >
+                                        <span>{formatBlogDate(post.created_at)}</span>
+                                        {#if post.read_time}
+                                            <span>•</span>
+                                            <span>{post.read_time}</span>
+                                        {/if}
+                                    </div>
+                                    <h3
+                                        class="text-2xl font-display font-light uppercase tracking-tight text-white group-hover:text-brand-red transition-colors duration-500"
+                                    >
+                                        {post.title}
+                                    </h3>
+                                    <p
+                                        class="text-xs text-white/50 font-light line-clamp-3 leading-relaxed"
+                                    >
+                                        {post.subtitle}
+                                    </p>
+                                </div>
+
+                                <div
+                                    class="mt-6 pt-4 border-t border-white/5 flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.2em] text-white/40 group-hover:text-white transition-colors duration-500"
+                                >
+                                    <span>Читать статью</span>
+                                    <ChevronRight
+                                        class="w-3 h-3 text-white/40 group-hover:text-white transition-colors"
+                                    />
+                                </div>
+                            </button>
+                        {/each}
+                    </div>
+                {/if}
             </section>
         {:else if currentView === "about"}
             <!-- Dedicated About Header -->
@@ -2053,7 +2177,7 @@
                         <span class="w-2 h-2 bg-brand-red rounded-full"></span>
                         <span
                             class="text-[9px] uppercase tracking-widest text-white/60 font-bold font-mono"
-                            >История и философия</span
+                            >О кафе</span
                         >
                     </div>
                     <h1
@@ -2066,9 +2190,9 @@
                     <p
                         class="max-w-xl mx-auto text-white/40 text-sm leading-relaxed font-light"
                     >
-                        Байкал Буузы — хранители подлинного вкуса степной Азии.
-                        Сочетаем вековые традиции и высочайшие гастрономические
-                        стандарты.
+                        «Байкал Буузы» — новое кафе, которое только открыло
+                        свои двери. Простое место для тех, кто хочет перекусить
+                        и отдохнуть.
                     </p>
                 </div>
             </section>
@@ -2078,43 +2202,39 @@
                 class="py-20 px-6 md:px-12 lg:px-20 bg-[#030303] border-t border-white/5"
             >
                 <div class="w-full space-y-32">
-                    <!-- Section 1: History -->
+                    <!-- Section 1: What we are -->
                     <div
                         class="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center"
                     >
                         <div class="space-y-8">
                             <span
                                 class="text-[10px] uppercase tracking-[0.4em] text-brand-red font-bold font-mono"
-                                >Наше Наследие</span
+                                >Что мы такое</span
                             >
                             <h2
                                 class="text-5xl font-display font-extralight uppercase tracking-tight text-white"
                             >
-                                Дорога длиной в <br />
+                                Новое место <br />
                                 <span
                                     class="font-serif italic text-white/30 lowercase font-medium"
-                                    >12 лет</span
+                                    >для отдыха</span
                                 >
                             </h2>
                             <div class="h-px w-20 bg-white/20" />
                             <p
                                 class="text-white/50 text-sm leading-relaxed font-light"
                             >
-                                Кафе «Байкал Буузы» зародилось как семейный
-                                гастрономический проект. Нашей миссией стало
-                                сохранение подлинного кулинарного наследия
-                                бурятского народа и его популяризация в
-                                европейской части страны.
+                                «Байкал Буузы» — небольшое кафе с понятным
+                                меню: кофе, закуски и блюда на каждый день.
+                                Подходит для обеда, короткого перерыва или
+                                неспешной встречи.
                             </p>
                             <p
                                 class="text-white/50 text-sm leading-relaxed font-light"
                             >
-                                За годы работы мы приготовили более 1 000 000
-                                бууз, завоевали признание тысяч постоянных
-                                гостей и сформировали бескомпромиссные стандарты
-                                свежести сырья. Каждое утро наша команда
-                                начинает с ручного замеса теста и тщательной
-                                переработки отборного охлажденного мяса.
+                                Кафе находится на начальном этапе работы. Мы
+                                последовательно расширяем меню и отлаживаем
+                                сервис.
                             </p>
                         </div>
                         <div
@@ -2122,23 +2242,23 @@
                         >
                             <img
                                 src="/images/hero_buuzy_plate.png"
-                                alt="Традиционные буузы"
+                                alt="Блюда кафе"
                                 class="w-full object-cover grayscale contrast-125 brightness-90 hover:grayscale-0 transition-all duration-1000"
                             />
                         </div>
                     </div>
 
-                    <!-- Section 2: Values (3 Columns) -->
+                    <!-- Section 2: What we offer (3 Columns) -->
                     <div class="border-t border-white/5 pt-32">
                         <div class="text-center space-y-4 mb-20">
                             <span
                                 class="text-[10px] uppercase tracking-[0.4em] text-brand-red font-bold font-mono"
-                                >Три Столпа</span
+                                >Что есть в меню</span
                             >
                             <h2
                                 class="text-4xl font-display font-extralight uppercase text-white"
                             >
-                                Наши Главные Ценности
+                                Что мы предлагаем
                             </h2>
                         </div>
 
@@ -2148,21 +2268,18 @@
                             >
                                 <span
                                     class="text-xs font-mono text-white/20 uppercase tracking-widest"
-                                    >01 / Рецепты</span
+                                    >01 / Напитки</span
                                 >
                                 <h3
                                     class="text-xl font-display font-light uppercase text-white"
                                 >
-                                    Традиции
+                                    Кофе
                                 </h3>
                                 <p
                                     class="text-xs text-white/40 leading-relaxed font-light"
                                 >
-                                    Мы готовим исключительно по старинным
-                                    рецептам бурят-монгольских кочевников.
-                                    Никаких компромиссов с фастфуд-технологиями:
-                                    ручная лепка, традиционный фарш,
-                                    приготовление на пару.
+                                    Эспрессо, американо, капучино и другие
+                                    кофейные напитки для любого времени дня.
                                 </p>
                             </div>
                             <div
@@ -2170,20 +2287,18 @@
                             >
                                 <span
                                     class="text-xs font-mono text-white/20 uppercase tracking-widest"
-                                    >02 / Стандарты</span
+                                    >02 / Еда</span
                                 >
                                 <h3
                                     class="text-xl font-display font-light uppercase text-white"
                                 >
-                                    Свежесть
+                                    Закуски и блюда
                                 </h3>
                                 <p
                                     class="text-xs text-white/40 leading-relaxed font-light"
                                 >
-                                    Наш индекс свежести — A-Grade. Мы не
-                                    используем замороженные полуфабрикаты или
-                                    консерванты. Ингредиенты закупаются
-                                    ежедневно у проверенных местных фермеров.
+                                    Лёгкие перекусы и сытные позиции для обеда
+                                    или ужина — без лишних сложностей.
                                 </p>
                             </div>
                             <div
@@ -2191,72 +2306,21 @@
                             >
                                 <span
                                     class="text-xs font-mono text-white/20 uppercase tracking-widest"
-                                    >03 / Душа</span
+                                    >03 / Атмосфера</span
                                 >
                                 <h3
                                     class="text-xl font-display font-light uppercase text-white"
                                 >
-                                    Гостеприимство
+                                    Место для отдыха
                                 </h3>
                                 <p
                                     class="text-xs text-white/40 leading-relaxed font-light"
                                 >
-                                    Каждый гость для нас — почетный визитер в
-                                    юрте. Мы стремимся передать атмосферу
-                                    домашнего сибирского уюта, где каждого
-                                    окружают заботой и щедрым угощением.
+                                    Спокойное пространство, где можно
+                                    расслабиться в одиночку или провести время
+                                    в компании.
                                 </p>
                             </div>
-                        </div>
-                    </div>
-
-                    <!-- Section 3: Chef Bio -->
-                    <div
-                        class="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center border-t border-white/5 pt-32"
-                    >
-                        <div
-                            class="relative order-last lg:order-first border border-white/10 p-2 bg-white/[0.01]"
-                        >
-                            <img
-                                src="/images/hero_steak_plate_1779197902033.png"
-                                alt="Наш Шеф-повар"
-                                class="w-full object-cover grayscale contrast-125 brightness-75 hover:grayscale-0 transition-all duration-1000"
-                            />
-                        </div>
-                        <div class="space-y-8">
-                            <span
-                                class="text-[10px] uppercase tracking-[0.4em] text-brand-red font-bold font-mono"
-                                >Мастер Кухни</span
-                            >
-                            <h2
-                                class="text-5xl font-display font-extralight uppercase tracking-tight text-white"
-                            >
-                                Шеф-Повар <br />
-                                <span
-                                    class="font-serif italic text-white/30 lowercase font-medium"
-                                    >Баир Дамдинов</span
-                                >
-                            </h2>
-                            <div class="h-px w-20 bg-white/20" />
-                            <p
-                                class="text-white/50 text-sm leading-relaxed font-light"
-                            >
-                                Баир Дамдинов — потомственный шеф-повар,
-                                посвятивший более 20 лет изучению и
-                                совершенствованию искусства бурятской и
-                                монгольской кухни. Его рецепты передавались из
-                                поколения в поколение в его семье из Агинских
-                                степей.
-                            </p>
-                            <p
-                                class="text-white/50 text-sm leading-relaxed font-light"
-                            >
-                                «Еда — это способ передать историю народа.
-                                Каждая бууза содержит в себе тепло степного
-                                ветра, память о предках и искреннее тепло рук
-                                мастера. Я рад приветствовать вас в нашем
-                                заведении и поделиться вкусами моего детства».
-                            </p>
                         </div>
                     </div>
                 </div>
@@ -2425,7 +2489,7 @@
                         <div
                             class="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-8"
                         >
-                            {#each [{ name: "Андрей В.", date: "20.10.25", text: "Буузы невероятно сочные! Горячий бульон внутри — это настоящее искусство.", platform: "NODE_VK" }, { name: "Юлия К.", date: "23.10.25", text: "Атмосферное и стильное место. Очень понравился облепиховый морс.", platform: "NODE_TG" }, { name: "Станислав А.", date: "01.11.25", text: "Прекрасный суп шулэн, согревает в любую непогоду. Обязательно вернусь.", platform: "NODE_TG" }] as review}
+                            {#each [{ name: "Андрей В.", date: "20.10.25", text: "Буузы невероятно сочные! Горячий бульон внутри — это настоящее искусство.", platform: "ВКонтакте" }, { name: "Юлия К.", date: "23.10.25", text: "Атмосферное и стильное место. Очень понравился облепиховый морс.", platform: "Telegram" }, { name: "Станислав А.", date: "01.11.25", text: "Прекрасный суп шулэн, согревает в любую непогоду. Обязательно вернусь.", platform: "Telegram" }] as review}
                                 <div
                                     class="p-8 border border-white/10 bg-white/[0.01] flex flex-col justify-between group hover:border-white/30 transition-all duration-700"
                                 >
@@ -2541,7 +2605,7 @@
                         class="border border-white/10 overflow-hidden relative grayscale brightness-75 contrast-125 opacity-40 hover:opacity-100 transition-opacity duration-1000"
                     >
                         <iframe
-                            src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2814.7749175440616!2d41.92131!3d45.02321!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zNDXCsDAxJzIzLjUiTiA0McKwNTUnMTYuNyJF!5e0!3m2!1sen!2sus!4v1716123456789!5m2!1sen!2sus"
+                            src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d23956!2d38.0769!3d44.5616!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x40f6050bde93ad69%3A0xfedf04cb7b8fbb39!2z0JPQtdC70LXQvdC00LbQuNC6!5e0!3m2!1sru!2sru!4v1716123456789!5m2!1sru!2sru"
                             width="100%"
                             height="100%"
                             style="border: 0;"
@@ -2650,7 +2714,7 @@
                         class="relative w-full h-[350px] overflow-hidden bg-black"
                     >
                         <img
-                            src={selectedBlogPost.image}
+                            src={selectedBlogPost.image_url || "/images/placeholder.jpg"}
                             alt={selectedBlogPost.title}
                             class="w-full h-full object-cover opacity-50"
                         />
@@ -2660,11 +2724,13 @@
                         <div
                             class="absolute bottom-10 left-10 right-10 space-y-4 font-mono"
                         >
-                            <span
-                                class="bg-brand-red px-3 py-1 text-[9px] uppercase tracking-widest text-white"
-                            >
-                                {selectedBlogPost.tag}
-                            </span>
+                            {#if selectedBlogPost.tag}
+                                <span
+                                    class="bg-brand-red px-3 py-1 text-[9px] uppercase tracking-widest text-white"
+                                >
+                                    {selectedBlogPost.tag}
+                                </span>
+                            {/if}
                             <h2
                                 class="text-4xl lg:text-5xl font-display font-light uppercase tracking-tight text-white"
                             >
@@ -2680,11 +2746,11 @@
                         <div
                             class="flex items-center gap-6 text-[10px] font-mono text-white/40 border-b border-white/5 pb-4"
                         >
-                            <span>Опубликовано: {selectedBlogPost.date}</span>
-                            <span>•</span>
-                            <span
-                                >Время чтения: {selectedBlogPost.readTime}</span
-                            >
+                            <span>Опубликовано: {formatBlogDate(selectedBlogPost.created_at)}</span>
+                            {#if selectedBlogPost.read_time}
+                                <span>•</span>
+                                <span>Время чтения: {selectedBlogPost.read_time}</span>
+                            {/if}
                         </div>
 
                         <p class="text-base italic text-white/90">
@@ -2724,13 +2790,29 @@
                         >Developer Mode</span
                     >
                 </div>
-                <a
-                    href="#"
-                    class="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-white hover:text-brand-red transition-colors"
-                >
-                    <Home class="w-4 h-4" />
-                    <span>Вернуться на сайт</span>
-                </a>
+                <div class="flex items-center gap-6">
+                    {#if currentUser}
+                        <button
+                            onclick={() => {
+                                isProfileOpen = true;
+                                editAddress = currentUser?.default_address || "";
+                                editEmail = currentUser?.email || "";
+                                fetchUserHistory();
+                            }}
+                            class="flex items-center gap-2 text-[10px] font-mono text-white/60 hover:text-white transition-colors cursor-pointer"
+                        >
+                            <User class="w-4 h-4 text-brand-red stroke-1" />
+                            <span>{currentUser.name}</span>
+                        </button>
+                    {/if}
+                    <a
+                        href="#"
+                        class="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-white hover:text-brand-red transition-colors"
+                    >
+                        <Home class="w-4 h-4" />
+                        <span>Вернуться на сайт</span>
+                    </a>
+                </div>
             </div>
         </nav>
 
@@ -2796,6 +2878,17 @@
                     >
                         <Layers class="w-4 h-4" />
                         <span>Категории ({categories.length})</span>
+                    </button>
+
+                    <button
+                        onclick={() => { adminTab = "blog"; fetchAdminBlogPosts(); }}
+                        class="w-full text-left px-6 py-4 text-[11px] font-mono uppercase tracking-widest border transition-all cursor-pointer flex items-center gap-4 {adminTab ===
+                        'blog'
+                            ? 'bg-white text-black border-white'
+                            : 'bg-transparent text-white/60 hover:text-white border-white/5 hover:border-white/20'}"
+                    >
+                        <Send class="w-4 h-4" />
+                        <span>Блог ({adminBlogPosts.length})</span>
                     </button>
                 {/if}
             </aside>
@@ -3565,6 +3658,170 @@
                                 </div>
                             {/each}
                         </div>
+                    </div>
+                {/if}
+
+                {#if adminTab === "blog"}
+                    <div class="space-y-8">
+                        <div class="flex items-center justify-between">
+                            <h2
+                                class="text-3xl font-display font-light uppercase tracking-tight text-white"
+                            >
+                                Управление <span
+                                    class="font-serif italic text-white/40 lowercase"
+                                    >блогом</span
+                                >
+                            </h2>
+                            <button
+                                onclick={openCreateBlogForm}
+                                class="px-6 py-3 bg-white text-black text-[10px] font-bold uppercase tracking-widest rounded-sm hover:bg-brand-red hover:text-white transition-colors cursor-pointer flex items-center gap-2"
+                            >
+                                <PlusCircle class="w-4 h-4" />
+                                <span>Новая статья</span>
+                            </button>
+                        </div>
+
+                        <!-- Blog Post Form Modal -->
+                        {#if isBlogFormOpen}
+                            <div
+                                transition:fade
+                                class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md"
+                            ></div>
+                            <div
+                                transition:scale
+                                class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-2xl bg-[#0a0a0a] border border-white/10 p-10 rounded-sm shadow-2xl overflow-y-auto max-h-[90vh]"
+                            >
+                                <div class="flex items-center justify-between mb-8">
+                                    <h3
+                                        class="text-xl font-display font-light uppercase tracking-tight text-white"
+                                    >
+                                        {editingBlogId === null ? "Новая статья" : "Редактировать статью"}
+                                    </h3>
+                                    <button
+                                        onclick={() => (isBlogFormOpen = false)}
+                                        class="text-white/40 hover:text-white"
+                                    ><X class="w-5 h-5" /></button>
+                                </div>
+
+                                <div class="space-y-4">
+                                    <div class="space-y-1">
+                                        <label class="text-[9px] uppercase tracking-widest text-white/40 block font-mono">Заголовок</label>
+                                        <input
+                                            type="text"
+                                            bind:value={blogFormTitle}
+                                            class="w-full bg-white/5 border border-white/10 px-4 py-3 text-xs text-white focus:outline-none focus:border-brand-red rounded-sm"
+                                        />
+                                    </div>
+                                    <div class="space-y-1">
+                                        <label class="text-[9px] uppercase tracking-widest text-white/40 block font-mono">Подзаголовок</label>
+                                        <input
+                                            type="text"
+                                            bind:value={blogFormSubtitle}
+                                            class="w-full bg-white/5 border border-white/10 px-4 py-3 text-xs text-white focus:outline-none focus:border-brand-red rounded-sm"
+                                        />
+                                    </div>
+                                    <div class="space-y-1">
+                                        <label class="text-[9px] uppercase tracking-widest text-white/40 block font-mono">Содержание</label>
+                                        <textarea
+                                            bind:value={blogFormContent}
+                                            rows="8"
+                                            class="w-full bg-white/5 border border-white/10 px-4 py-3 text-xs text-white focus:outline-none focus:border-brand-red rounded-sm resize-none"
+                                        ></textarea>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div class="space-y-1">
+                                            <label class="text-[9px] uppercase tracking-widest text-white/40 block font-mono">Тег</label>
+                                            <input
+                                                type="text"
+                                                bind:value={blogFormTag}
+                                                placeholder="Традиции"
+                                                class="w-full bg-white/5 border border-white/10 px-4 py-3 text-xs text-white focus:outline-none focus:border-brand-red rounded-sm"
+                                            />
+                                        </div>
+                                        <div class="space-y-1">
+                                            <label class="text-[9px] uppercase tracking-widest text-white/40 block font-mono">Время чтения</label>
+                                            <input
+                                                type="text"
+                                                bind:value={blogFormReadTime}
+                                                placeholder="5 мин чтения"
+                                                class="w-full bg-white/5 border border-white/10 px-4 py-3 text-xs text-white focus:outline-none focus:border-brand-red rounded-sm"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div class="space-y-1">
+                                        <label class="text-[9px] uppercase tracking-widest text-white/40 block font-mono">Изображение</label>
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onchange={(e) => (blogFormImageFile = e.currentTarget.files?.[0] || null)}
+                                            class="w-full bg-white/5 border border-white/10 px-4 py-3 text-xs text-white focus:outline-none focus:border-brand-red rounded-sm font-mono"
+                                        />
+                                        {#if blogFormImage && !blogFormImageFile}
+                                            <p class="text-[10px] text-white/40 mt-1">Текущее: {blogFormImage}</p>
+                                        {/if}
+                                    </div>
+                                    <div class="space-y-1 mt-2">
+                                        <label class="flex items-center gap-2 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                bind:checked={blogFormIsPublished}
+                                                class="w-4 h-4 accent-brand-red"
+                                            />
+                                            <span class="text-[9px] uppercase tracking-widest text-white/80 font-mono">Опубликовано</span>
+                                        </label>
+                                    </div>
+                                    <div class="pt-4 flex gap-4">
+                                        <button
+                                            onclick={() => (isBlogFormOpen = false)}
+                                            class="flex-1 bg-white/5 border border-white/10 hover:bg-white/10 text-white py-3 text-xs font-bold uppercase tracking-widest transition-colors cursor-pointer"
+                                        >Отмена</button>
+                                        <button
+                                            onclick={handleSaveBlogPost}
+                                            class="flex-1 bg-white text-black hover:bg-brand-red hover:text-white py-3 text-xs font-bold uppercase tracking-widest transition-colors cursor-pointer"
+                                        >Сохранить</button>
+                                    </div>
+                                </div>
+                            </div>
+                        {/if}
+
+                        <!-- Blog Posts List -->
+                        {#if adminBlogPosts.length === 0}
+                            <p class="text-sm font-mono text-white/30 italic">Статей пока нет</p>
+                        {:else}
+                            <div class="space-y-4">
+                                {#each adminBlogPosts as post}
+                                    <div class="border border-white/10 bg-white/[0.01] p-6 rounded-sm flex items-start gap-6">
+                                        <div class="w-24 h-16 flex-shrink-0 bg-[#0a0a0a] border border-white/5 rounded-sm overflow-hidden">
+                                            <img
+                                                src={post.image_url || "/images/placeholder.jpg"}
+                                                alt={post.title}
+                                                class="w-full h-full object-cover"
+                                            />
+                                        </div>
+                                        <div class="flex-1 min-w-0">
+                                            <div class="flex items-center gap-3 mb-1">
+                                                <h4 class="text-sm font-bold uppercase tracking-wider text-white truncate">{post.title}</h4>
+                                                {#if !post.is_published}
+                                                    <span class="text-[9px] font-mono uppercase px-2 py-0.5 bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 flex-shrink-0">Черновик</span>
+                                                {/if}
+                                            </div>
+                                            <p class="text-[10px] text-white/40 font-mono mb-1">{formatBlogDate(post.created_at)}{post.tag ? ` · ${post.tag}` : ""}</p>
+                                            <p class="text-xs text-white/50 line-clamp-1">{post.subtitle}</p>
+                                        </div>
+                                        <div class="flex gap-2 flex-shrink-0">
+                                            <button
+                                                onclick={() => openEditBlogForm(post)}
+                                                class="px-4 py-2 border border-white/10 hover:border-white text-[10px] font-bold uppercase tracking-wider text-white transition-all cursor-pointer"
+                                            >Редактировать</button>
+                                            <button
+                                                onclick={() => handleDeleteBlogPost(post.id)}
+                                                class="p-2 border border-white/10 hover:bg-brand-red hover:border-brand-red hover:text-white text-brand-red transition-all cursor-pointer"
+                                            ><Trash2 class="w-4 h-4" /></button>
+                                        </div>
+                                    </div>
+                                {/each}
+                            </div>
+                        {/if}
                     </div>
                 {/if}
 

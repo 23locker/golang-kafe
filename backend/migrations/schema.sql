@@ -60,27 +60,19 @@ CREATE TABLE IF NOT EXISTS reservations (
     status VARCHAR(50) DEFAULT 'new'
 );
 
-INSERT INTO categories (id, name, slug) VALUES
-(1, 'Буузы', 'buuzy'),
-(2, 'Супы', 'soups'),
-(3, 'Салаты', 'salads'),
-(4, 'Десерты', 'desserts'),
-(5, 'Напитки', 'drinks')
-ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO products (id, name, description, price, category_id, image_url, weight, calories) VALUES
-(1, 'Буузы Классические', 'Традиционные бурятские буузы из смеси говядины и свинины, с ароматным бульоном внутри.', 90.00, 1, '', 75, 180),
-(2, 'Буузы с бараниной', 'Сочные буузы со стопроцентной рубленой бараниной и луком.', 100.00, 1, '', 75, 190),
-(3, 'Шулэн', 'Домашний суп-лапша с говядиной и свежей зеленью.', 250.00, 2, '', 350, 310),
-(4, 'Бухлёр', 'Наваристый традиционный бульон с крупным куском нежной говядины и картофелем.', 290.00, 2, '', 400, 390),
-(5, 'Салат Азиатский', 'Свежий салат с битыми огурцами, кунжутом и легкой заправкой.', 180.00, 3, '', 150, 120),
-(6, 'Черемуховый пирог', 'Нежный пирог из черемуховой муки со сметанным кремом.', 220.00, 4, '', 120, 280),
-(7, 'Чай с молоком', 'Традиционный бурятский чай с добавлением молока и щепотки соли по вкусу.', 70.00, 5, '', 200, 80),
-(8, 'Облепиховый морс', 'Освежающий витаминный морс из натуральной облепихи.', 90.00, 5, '', 250, 95)
-ON CONFLICT (id) DO NOTHING;
-
--- Очищаем устаревшие фиктивные пути к изображениям для seed-продуктов
-UPDATE products SET image_url = '' WHERE id IN (1,2,3,4,5,6,7,8) AND image_url LIKE '/images/%';
+CREATE TABLE IF NOT EXISTS blog_posts (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(500) NOT NULL,
+    subtitle TEXT,
+    content TEXT,
+    image_url VARCHAR(255),
+    tag VARCHAR(100),
+    read_time VARCHAR(50),
+    is_published BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
 
 ALTER TABLE reservations ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'new';
 ALTER TABLE products ADD COLUMN IF NOT EXISTS is_available BOOLEAN DEFAULT TRUE;

@@ -51,6 +51,19 @@ type OrderItem struct {
 	Price     float64
 }
 
+type BlogPost struct {
+	ID          int
+	Title       string
+	Subtitle    string
+	Content     string
+	ImageURL    string
+	Tag         string
+	ReadTime    string
+	IsPublished bool
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
 type Reservation struct {
 	ID           int
 	UserID       *int

@@ -75,6 +75,19 @@ type OrderResponse struct {
 	Items         []OrderItemResponse `json:"items"`
 }
 
+type BlogPostResponse struct {
+	ID          int       `json:"id"`
+	Title       string    `json:"title"`
+	Subtitle    string    `json:"subtitle"`
+	Content     string    `json:"content"`
+	ImageURL    string    `json:"image_url"`
+	Tag         string    `json:"tag"`
+	ReadTime    string    `json:"read_time"`
+	IsPublished bool      `json:"is_published"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
 type CreateReservationRequest struct {
 	CustomerName string `json:"customer_name"`
 	Phone        string `json:"phone"`

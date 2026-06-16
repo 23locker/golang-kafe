@@ -31,6 +31,7 @@ type Handler struct {
 	orderService       services.OrderService
 	reservationService services.ReservationService
 	adminService       services.AdminService
+	blogService        services.BlogService
 	jwtSecret          string
 }
 
@@ -40,6 +41,7 @@ func NewHandler(
 	orderService services.OrderService,
 	reservationService services.ReservationService,
 	adminService services.AdminService,
+	blogService services.BlogService,
 	jwtSecret string,
 ) *Handler {
 	return &Handler{
@@ -48,6 +50,7 @@ func NewHandler(
 		orderService:       orderService,
 		reservationService: reservationService,
 		adminService:       adminService,
+		blogService:        blogService,
 		jwtSecret:          jwtSecret,
 	}
 }
@@ -80,6 +83,8 @@ func (h *Handler) InitRoutes() http.Handler {
 		r.Get("/categories", h.getCategories)
 		r.Get("/products", h.getProducts)
 		r.Get("/products/{id}", h.getProductByID)
+		r.Get("/blog", h.getBlogPosts)
+		r.Get("/blog/{id}", h.getBlogPostByID)
 
 		r.Group(func(r chi.Router) {
 			r.Use(h.authOptionalMiddleware)
@@ -113,6 +118,10 @@ func (h *Handler) InitRoutes() http.Handler {
 				r.Put("/categories/{id}", h.adminUpdateCategory)
 				r.Delete("/categories/{id}", h.adminDeleteCategory)
 				r.Get("/stats", h.adminGetStats)
+				r.Get("/blog", h.adminGetBlogPosts)
+				r.Post("/blog", h.adminCreateBlogPost)
+				r.Put("/blog/{id}", h.adminUpdateBlogPost)
+				r.Delete("/blog/{id}", h.adminDeleteBlogPost)
 			})
 		})
 	})
@@ -774,4 +783,145 @@ func (h *Handler) adminDeleteCategory(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": "категория успешно удалена"})
+}
+
+func (h *Handler) getBlogPosts(w http.ResponseWriter, r *http.Request) {
+	posts, err := h.blogService.GetPosts(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(posts)
+}
+
+func (h *Handler) getBlogPostByID(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "неверный формат идентификатора", http.StatusBadRequest)
+		return
+	}
+	post, err := h.blogService.GetPostByID(r.Context(), id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(post)
+}
+
+func (h *Handler) parseBlogPostForm(r *http.Request) (dto.BlogPostResponse, error) {
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		return dto.BlogPostResponse{}, fmt.Errorf("ошибка парсинга формы: %w", err)
+	}
+	var req dto.BlogPostResponse
+	req.Title = r.FormValue("title")
+	req.Subtitle = r.FormValue("subtitle")
+	req.Content = r.FormValue("content")
+	req.Tag = r.FormValue("tag")
+	req.ReadTime = r.FormValue("read_time")
+	req.IsPublished = r.FormValue("is_published") == "true"
+
+	file, header, err := r.FormFile("image")
+	if err == nil {
+		defer file.Close()
+		ext := filepath.Ext(header.Filename)
+		filename := fmt.Sprintf("%d%s", time.Now().UnixNano(), ext)
+		workDir, _ := os.Getwd()
+		uploadsDir := filepath.Join(workDir, "uploads")
+		os.MkdirAll(uploadsDir, 0755)
+		dstPath := filepath.Join(uploadsDir, filename)
+		dst, err := os.Create(dstPath)
+		if err != nil {
+			return req, fmt.Errorf("ошибка сохранения файла: %w", err)
+		}
+		defer dst.Close()
+		if _, err := io.Copy(dst, file); err != nil {
+			return req, fmt.Errorf("ошибка записи файла: %w", err)
+		}
+		req.ImageURL = "/uploads/" + filename
+	}
+	return req, nil
+}
+
+func (h *Handler) adminGetBlogPosts(w http.ResponseWriter, r *http.Request) {
+	posts, err := h.adminService.GetAllBlogPosts(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(posts)
+}
+
+func (h *Handler) adminCreateBlogPost(w http.ResponseWriter, r *http.Request) {
+	req, err := h.parseBlogPostForm(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	resp, err := h.adminService.CreateBlogPost(r.Context(), req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func (h *Handler) adminUpdateBlogPost(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "неверный формат идентификатора", http.StatusBadRequest)
+		return
+	}
+	req, err := h.parseBlogPostForm(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if req.ImageURL == "" {
+		existing, err := h.blogService.GetPostByID(r.Context(), id)
+		if err == nil {
+			req.ImageURL = existing.ImageURL
+		}
+	} else {
+		existing, err := h.blogService.GetPostByID(r.Context(), id)
+		if err == nil && existing.ImageURL != "" && strings.HasPrefix(existing.ImageURL, "/uploads/") {
+			workDir, _ := os.Getwd()
+			oldPath := filepath.Join(workDir, "uploads", strings.TrimPrefix(existing.ImageURL, "/uploads/"))
+			os.Remove(oldPath)
+		}
+	}
+	resp, err := h.adminService.UpdateBlogPost(r.Context(), id, req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func (h *Handler) adminDeleteBlogPost(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "неверный формат идентификатора", http.StatusBadRequest)
+		return
+	}
+	existing, err := h.blogService.GetPostByID(r.Context(), id)
+	if err == nil && existing.ImageURL != "" && strings.HasPrefix(existing.ImageURL, "/uploads/") {
+		workDir, _ := os.Getwd()
+		oldPath := filepath.Join(workDir, "uploads", strings.TrimPrefix(existing.ImageURL, "/uploads/"))
+		os.Remove(oldPath)
+	}
+	if err := h.adminService.DeleteBlogPost(r.Context(), id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "статья успешно удалена"})
 }

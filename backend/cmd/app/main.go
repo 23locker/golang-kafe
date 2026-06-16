@@ -57,29 +57,41 @@ func main() {
 	productRepo := repositories.NewPostgresProductRepository(db)
 	orderRepo := repositories.NewPostgresOrderRepository(db)
 	resRepo := repositories.NewPostgresReservationRepository(db)
+	blogRepo := repositories.NewPostgresBlogPostRepository(db)
 
 	authServ := services.NewAuthService(userRepo, cfg.JWTSecret)
 	prodServ := services.NewProductService(productRepo)
 	orderServ := services.NewOrderService(orderRepo, productRepo)
 	resServ := services.NewReservationService(resRepo)
-	adminServ := services.NewAdminService(orderRepo, resRepo, productRepo)
+	blogServ := services.NewBlogService(blogRepo)
+	adminServ := services.NewAdminService(orderRepo, resRepo, productRepo, blogRepo)
 
-	// Инициализация главного администратора
+	// Инициализация администраторов по умолчанию
 	ctx := context.Background()
-	_, err = userRepo.GetByPhone(ctx, "+7988548955")
-	if err != nil {
-		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("123456"), bcrypt.DefaultCost)
-		chiefAdmin := &models.User{
-			Name:         "Главный Администратор",
-			Phone:        "+7988548955",
-			PasswordHash: string(hashedPassword),
-			Role:         "chief_admin",
+
+	defaultAdmins := []struct {
+		name  string
+		phone string
+	}{
+		{"Главный Администратор", "+7988548955"},
+		{"Администратор", "+79991234567"},
+	}
+	for _, a := range defaultAdmins {
+		_, err = userRepo.GetByPhone(ctx, a.phone)
+		if err != nil {
+			hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("123456"), bcrypt.DefaultCost)
+			admin := &models.User{
+				Name:         a.name,
+				Phone:        a.phone,
+				PasswordHash: string(hashedPassword),
+				Role:         "chief_admin",
+			}
+			_ = userRepo.Create(ctx, admin)
+			log.Printf("Создан администратор: %s", a.phone)
 		}
-		_ = userRepo.Create(ctx, chiefAdmin)
-		log.Println("Создан главный администратор: +7988548955")
 	}
 
-	h := handlers.NewHandler(authServ, prodServ, orderServ, resServ, adminServ, cfg.JWTSecret)
+	h := handlers.NewHandler(authServ, prodServ, orderServ, resServ, adminServ, blogServ, cfg.JWTSecret)
 
 	// Создаем директорию uploads, если она не существует
 	if err := os.MkdirAll("uploads", 0755); err != nil {
