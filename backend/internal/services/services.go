@@ -343,6 +343,9 @@ func (s *ReservationServiceImpl) CreateReservation(ctx context.Context, userID *
 	if n, _ := fmt.Sscanf(req.ReserveTime, "%d:%d", &hour, &minute); n != 2 || hour < 0 || hour > 23 || minute < 0 || minute > 59 {
 		return nil, fmt.Errorf("неверный формат времени, ожидается ЧЧ:ММ")
 	}
+	if hour < 10 || hour > 21 || (hour == 21 && minute > 30) {
+		return nil, fmt.Errorf("бронирование доступно только в рабочее время кафе: с 10:00 до 21:30")
+	}
 	moscow := time.FixedZone("MSK", 3*60*60)
 	reserveDateTime := time.Date(parsedDate.Year(), parsedDate.Month(), parsedDate.Day(), hour, minute, 0, 0, moscow)
 	if !reserveDateTime.After(time.Now().In(moscow)) {

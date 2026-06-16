@@ -813,6 +813,10 @@
         const nowMoscowMs = Date.now() + moscowOffsetMs;
         const [rYear, rMonth, rDay] = reserveDate.split("-").map(Number);
         const [rHour, rMinute] = reserveTime.split(":").map(Number);
+        if (rHour < 10 || rHour > 21 || (rHour === 21 && rMinute > 30)) {
+            alert("Бронирование возможно только в рабочее время кафе: с 10:00 до 21:30");
+            return;
+        }
         const reserveMoscowMs = Date.UTC(
             rYear,
             rMonth - 1,
@@ -2559,6 +2563,8 @@
                                 <input
                                     type="time"
                                     bind:value={reserveTime}
+                                    min="10:00"
+                                    max="21:30"
                                     class="w-full bg-white/5 border border-white/10 px-4 py-3 rounded-sm text-sm text-white focus:outline-none focus:border-brand-red font-light"
                                 />
                             </div>
